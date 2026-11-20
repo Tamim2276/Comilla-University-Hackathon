@@ -5,6 +5,9 @@ breaks the feature that needs it, not the whole app. Later steps add adapters an
 """
 
 import logging
+import threading
+import time
+from collections.abc import Callable
 from functools import cached_property
 
 from sqlalchemy import Engine, text
@@ -214,6 +217,32 @@ class Container:
             log.warning("ROUTER_BACKEND=banglabert is not built yet (D2-T1); using tfidf")
         return self.tfidf_classifier
 
+    def warm_up(self) -> threading.Thread | None:
+        """Loads the router, the search model and the agent graph in the background (D2-T4).
+
+        Without this the first question pays for the model loading (15 to 35 s). The server answers
+        /health at once; a question that arrives during warm-up waits only for what is still loading.
+        """
+        if not self.settings.preload_models:
+            return None
+        thread = threading.Thread(target=self._preload, name="preload-models", daemon=True)
+        thread.start()
+        return thread
+
+    def _preload(self) -> None:
+        started = time.perf_counter()
+        loaders: list[tuple[str, Callable[[], object]]] = [
+            ("router", lambda: self.classifier.classify("বয়স্ক ভাতা")),
+            ("search", lambda: self.retriever.search("বয়স্ক ভাতা", None, 1)),
+            ("agent", lambda: self.answer_engine),
+        ]
+        for name, load in loaders:
+            try:
+                load()
+            except Exception as exc:  # a missing model only means that part stays lazy
+                log.warning("warm-up: %s not loaded (%s)", name, type(exc).__name__)
+        log.info("warm-up finished in %.1f s", time.perf_counter() - started)
+
     def check_router(self) -> str:
         """ok = the router can run; not_configured = train it first. Never loads a model."""
         if self.settings.router_backend == "llm":
@@ -229,6 +258,7 @@ class Container:
             llm=self.llm,
             services=self.services_by_id,
             confidence_threshold=s.router_confidence_threshold,
+            cache=self.answer_cache,
             voice_fast_mode=s.voice_fast_mode,
             llm_backend=s.llm_backend,
         )

@@ -30,6 +30,7 @@ class AgentState(TypedDict, total=False):
     service_id: str
     confidence: float
     router_source: RouterSource
+    cache_key: str  # set only when the answer may be cached / served from the cache (FR-AGT-15)
     query: str  # what is sent to the retriever (rewrite_query changes it)
     passages: list[Passage]
     relevant_ids: list[str]  # "P1", "P2"... chosen by grade

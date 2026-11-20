@@ -10,11 +10,13 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.application.agent import prompts
+from app.application.agent.cache_key import cache_key
 from app.application.agent.routing import OTHER
 from app.application.agent.state import AgentState
 from app.application.formatting import trim_speech
 from app.application.ports.classifier import ServiceClassifier
 from app.application.ports.llm import LLM, ModelRole
+from app.application.ports.repositories import AnswerCache
 from app.application.ports.retrieval import Passage, Retriever
 from app.domain.entities import Answer, Checklist, Citation, Message, Service
 from app.domain.errors import ClassifierUnavailable
@@ -38,6 +40,7 @@ class AgentDeps:
     confidence_threshold: float = ROUTER_CONFIDENCE_THRESHOLD
     top_k: int = TOP_K
     max_retries: int = MAX_RETRIEVAL_RETRIES
+    cache: AnswerCache | None = None  # FR-AGT-15; None = no caching
     voice_fast_mode: bool = True  # calls skip `grade` (FR-AGT-06)
     llm_backend: str | None = None  # FR-AGT-18: recorded on every answer
 
@@ -98,10 +101,16 @@ def classify(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     label, confidence = candidates[0] if candidates else (OTHER, 0.0)
     if label not in deps.services:
         label, confidence = OTHER, 0.0
-    return {
+    update: dict[str, Any] = {
         "pending_service_id": None, "candidates": candidates, "service_id": label,
         "confidence": confidence, "router_source": deps.classifier.source, "query": question,
     }  # fmt: skip
+    # FR-AGT-15: cache only when the local router was sure, so short replies such as "হ্যাঁ"
+    # (which depend on the conversation) are never served from the cache.
+    local = deps.classifier.source is not RouterSource.LLM
+    if deps.cache is not None and local and label != OTHER and confidence >= deps.confidence_threshold:
+        update["cache_key"] = cache_key(question, label, state["channel"])
+    return update
 
 
 def llm_classify(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
@@ -123,6 +132,19 @@ def llm_classify(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     if standalone:  # "আর কোথায় জমা দেবো?" alone finds nothing; the full question does
         update["query"] = standalone
     return update
+
+
+def cache_lookup(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
+    """A repeated question within 24 hours is answered from the cache, with no LLM call (FR-AGT-15)."""
+    key = state.get("cache_key")
+    if not key or deps.cache is None:
+        return {}
+    try:
+        hit = deps.cache.get(key)
+    except Exception:  # a broken cache must never break answering
+        log.exception("answer cache read failed")
+        return {}
+    return {"answer": hit} if hit is not None else {}
 
 
 def retrieve(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
@@ -237,7 +259,19 @@ def finalize(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
         citations=build_citations(_supported_claims(state), state.get("passages") or []),
         llm_backend=deps.llm_backend,
     )
+    _store_in_cache(state, deps, answer)
     return {"answer": answer}
+
+
+def _store_in_cache(state: AgentState, deps: AgentDeps, answer: Answer) -> None:
+    """Only `answered` results are stored (FR-AGT-15), and only if a cache key was set."""
+    key = state.get("cache_key")
+    if not key or deps.cache is None or answer.status is not AnswerStatus.ANSWERED:
+        return
+    try:
+        deps.cache.set(key, answer)
+    except Exception:
+        log.exception("answer cache write failed")
 
 
 def _supported_claims(state: AgentState) -> list[dict[str, Any]]:

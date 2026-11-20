@@ -56,6 +56,7 @@ Open `backend/.env` and fill in:
 | `GEMINI_API_KEYS` | Your Gemini key from Google AI Studio (comma separated if you have several). Tamim shares the team keys privately. |
 | `GEMINI_MODEL_MAIN`, `GEMINI_MODEL_FAST` | The model names Tamim sends (today both are `gemini-3.5-flash-lite`: the Flash models answer too slowly for a call). |
 | `AGENT_ENGINE` | `langgraph` = the real agent (needs a working LLM). `stub` = a fixed sample answer, no keys or models needed: handy while you build the app or the call flow. |
+| `PRELOAD_MODELS` | `true` = load the router and search models in the background when the server starts, so the first question is fast. `false` = load them on the first question. |
 | Ragib | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_NUMBER` (from Tamim), `PUBLIC_URL` (your ngrok URL). |
 | Ariful | `SMS_BACKEND=textbee`, `TEXTBEE_API_KEY`, `TEXTBEE_DEVICE_ID` once the textbee phone works; until then keep `SMS_BACKEND=console`. |
 
@@ -79,6 +80,7 @@ python -m scripts.ask "আমার বয়স ৬৭, বয়স্ক ভ�
 - The search should list an old-age allowance passage first.
 - `train_baseline` trains the TF-IDF router from `data/questions/train.csv` in a few seconds and saves `backend/data/models/tfidf_router.joblib` (git-ignored).
 - `ask` runs the real agent once and prints the service, the Bangla answer, the checklist and the sources. It needs a working LLM; the first question takes 15 to 35 s because the models load, later ones about 3 to 5 s.
+- Before a demo or rehearsal: `python -m scripts.prewarm` asks the questions in `data/questions/demo_questions.txt` once and stores the answers for 24 hours; repeating them then takes well under a second and uses no Gemini quota.
 - If `ingest` says it "couldn't connect to huggingface.co" although your internet works, the variable `HF_HUB_OFFLINE` is set on your computer. In that terminal run `Remove-Item Env:HF_HUB_OFFLINE` (Linux / macOS: `unset HF_HUB_OFFLINE`) and run `ingest` again.
 
 ## 6. Backend: check that everything works

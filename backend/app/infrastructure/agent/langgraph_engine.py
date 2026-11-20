@@ -40,6 +40,7 @@ class LangGraphAnswerEngine:
         graph = StateGraph(AgentState)
         nodes: dict[str, Step] = {
             routing.CLASSIFY: steps.classify,
+            routing.CACHE_LOOKUP: steps.cache_lookup,
             routing.LLM_CLASSIFY: steps.llm_classify,
             routing.RETRIEVE: steps.retrieve,
             routing.GRADE: steps.grade,
@@ -59,7 +60,12 @@ class LangGraphAnswerEngine:
         graph.add_conditional_edges(
             routing.CLASSIFY,
             lambda state: routing.after_classify(state, threshold),
-            [routing.RETRIEVE, routing.LLM_CLASSIFY, routing.FALLBACK],
+            [routing.CACHE_LOOKUP, routing.RETRIEVE, routing.LLM_CLASSIFY, routing.FALLBACK],
+        )
+        graph.add_conditional_edges(
+            routing.CACHE_LOOKUP,
+            routing.after_cache_lookup,
+            {routing.DONE: END, routing.RETRIEVE: routing.RETRIEVE},
         )
         graph.add_conditional_edges(
             routing.LLM_CLASSIFY, routing.after_llm_classify, [routing.RETRIEVE, routing.FALLBACK]

@@ -44,7 +44,7 @@ Each person follows their own rows top to bottom. A step only needs the steps ab
 | 13 | D1-R3 | App pages + chat page: Checkpoint 1 in the app | Ariful | 4 | |
 | 14 | D1-A3 | Twilio voice, echo mode | Ragib | 4 | |
 | 15 | D1-A4 | SMS adapters, background runner, full AskQuestion | Ariful | 4 | |
-| 16 | D1-T6 | BanglaBERT training on your PC or Colab (runs while you continue) | Tamim | 3 | done (test 84.3%, CPU 13 min) |
+| 16 | D1-T6 | BanglaBERT training on your PC or Colab (runs while you continue) | Tamim | 3 | done (test 93.5%, CPU 13 min) |
 | 17 | D1-T5 | Grading, rewrite, verifier, follow-up, fallback | Tamim | 6 | done |
 | 18 | D1-A5 | Voice wired to AskQuestion + SMS: Checkpoint 2 | Ragib | 4 | |
 | 19 | D1-R5 | Checklist card, sources, history page | Ariful | 3 | |
@@ -55,7 +55,7 @@ Each person follows their own rows top to bottom. A step only needs the steps ab
 | 24 | D2-R1 | Admin APIs + dashboard | Ariful | 4 | |
 | 25 | D2-R2 | "Call me" button + answer audio (TTS) | Ragib | 2 | |
 | 26 | D2-A2 | Async voice answer + voice error paths | Ragib | 2 | |
-| 27 | D2-T4 | Answer cache in the agent + pre-warm | Tamim | 1 | |
+| 27 | D2-T4 | Answer cache in the agent + pre-warm | Tamim | 1 | done |
 | 28 | D2-T2 | K-Means clusters + cluster APIs | Tamim | 2 | |
 | 29 | D2-R5 | Cluster view in the dashboard | Ariful | 1 | |
 | 30 | D2-R4 | App polish, 360 px check, PWA | Ariful | 1 | |

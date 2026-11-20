@@ -1,6 +1,6 @@
 """Which step runs next (SRS 7.4). Pure functions of the state, so each branch is easy to test.
 
-classify -> (llm_classify) -> retrieve -> grade -> generate -> verify -> finalize, with
+classify -> (cache_lookup) | (llm_classify) -> retrieve -> grade -> generate -> verify -> finalize, with
 rewrite_query -> retrieve loops sharing one `retries` counter, finalize_follow_up for a missing
 fact, and fallback for `other` or when nothing reliable is left. Voice fast mode skips grade.
 """
@@ -11,6 +11,8 @@ from app.domain.value_objects import RouterSource
 OTHER = "other"
 
 CLASSIFY = "classify"
+CACHE_LOOKUP = "cache_lookup"
+DONE = "done"  # the graph's end, used as a routing target
 LLM_CLASSIFY = "llm_classify"
 RETRIEVE = "retrieve"
 GRADE = "grade"
@@ -32,8 +34,14 @@ def after_classify(state: AgentState, threshold: float) -> str:
     label = state.get("service_id")
     confident = state.get("confidence", 0.0) >= threshold
     if confident or state.get("router_source") is RouterSource.LLM:  # the LLM router is not asked twice
-        return FALLBACK if label == OTHER or not label else RETRIEVE
+        if label == OTHER or not label:
+            return FALLBACK
+        return CACHE_LOOKUP if state.get("cache_key") else RETRIEVE  # FR-AGT-15
     return LLM_CLASSIFY  # FR-AGT-03
+
+
+def after_cache_lookup(state: AgentState) -> str:
+    return DONE if state.get("answer") is not None else RETRIEVE
 
 
 def after_llm_classify(state: AgentState) -> str:

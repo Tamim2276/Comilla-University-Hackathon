@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     services_file: Path = BACKEND_DIR / "data" / "services.yaml"
     voice_fast_mode: bool = True
     agent_engine: Literal["langgraph", "stub"] = "langgraph"  # stub: fixed answer, no keys needed
+    preload_models: bool = False  # True in .env.example: load models in the background at startup
 
     # --- Twilio (FR-CALL)
     twilio_account_sid: str = ""
