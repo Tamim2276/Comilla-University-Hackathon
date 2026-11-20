@@ -14,7 +14,11 @@ from app.domain.value_objects import Channel, RouterSource
 
 
 def merge_timings(old: Mapping[str, float], new: Mapping[str, float]) -> dict[str, float]:
-    return {**old, **new}
+    """A step that runs again (retrieve after a rewrite) adds to its earlier time."""
+    merged = dict(old)
+    for step, ms in new.items():
+        merged[step] = round(merged.get(step, 0.0) + ms, 1)
+    return merged
 
 
 class AgentState(TypedDict, total=False):
@@ -26,12 +30,13 @@ class AgentState(TypedDict, total=False):
     service_id: str
     confidence: float
     router_source: RouterSource
-    query: str  # what is sent to the retriever (rewritten in D1-T5)
+    query: str  # what is sent to the retriever (rewrite_query changes it)
     passages: list[Passage]
-    relevant_ids: list[str]  # "P1", "P2"... (grading, D1-T5)
-    retries: int
+    relevant_ids: list[str]  # "P1", "P2"... chosen by grade
+    retries: int  # one counter for the grade, generate and verify loops (max MAX_RETRIEVAL_RETRIES)
     draft: dict[str, Any]  # the generate step's JSON
-    verified_claims: list[dict[str, Any]]  # (verify, D1-T5)
+    verified_claims: list[dict[str, Any]]  # draft claims, each with `supported` added by verify
+    speech_supported: bool
     answer: Answer
     timings: Annotated[dict[str, float], merge_timings]
     llm_calls: Annotated[int, operator.add]

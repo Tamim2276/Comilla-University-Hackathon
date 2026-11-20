@@ -44,8 +44,8 @@ Each person follows their own rows top to bottom. A step only needs the steps ab
 | 13 | D1-R3 | App pages + chat page: Checkpoint 1 in the app | Ariful | 4 | |
 | 14 | D1-A3 | Twilio voice, echo mode | Ragib | 4 | |
 | 15 | D1-A4 | SMS adapters, background runner, full AskQuestion | Ariful | 4 | |
-| 16 | D1-T6 | BanglaBERT training on Colab (runs while you continue) | Tamim | 3 | |
-| 17 | D1-T5 | Grading, rewrite, verifier, follow-up, fallback | Tamim | 6 | |
+| 16 | D1-T6 | BanglaBERT training on your PC or Colab (runs while you continue) | Tamim | 3 | done (test 84.3%, CPU 13 min) |
+| 17 | D1-T5 | Grading, rewrite, verifier, follow-up, fallback | Tamim | 6 | done |
 | 18 | D1-A5 | Voice wired to AskQuestion + SMS: Checkpoint 2 | Ragib | 4 | |
 | 19 | D1-R5 | Checklist card, sources, history page | Ariful | 3 | |
 | 20 | D1-R7 | Mic input in the app | Ragib | 1 | |
@@ -591,12 +591,12 @@ Merge to `main`. Tamim replaces `StubAnswerEngine` with `LangGraphAnswerEngine` 
 
 **Done-check:** S1, S2 (follow-up), S7 (fallback text exactly) work through `scripts.ask`.
 
-### D1-T6: BanglaBERT training on Colab (Tamim; training runs while you continue)
+### D1-T6: BanglaBERT training on your PC or Colab (Tamim; training runs while you continue)
 **Requirements:** FR-DATA-07.
-1. `ml/train_router.py`: install `transformers`, `datasets`, the csebuetnlp normalizer; load `train.csv`, `val.csv`; normalise text with `normalize()`; tokenizer + `AutoModelForSequenceClassification.from_pretrained("csebuetnlp/banglabert", num_labels=9)`; `Trainer` with lr 2e-5, batch 32, 4 epochs, max length 64, eval each epoch, keep best by macro-F1; save model, tokenizer, `labels.json`; zip the folder.
-2. `ml/README.md`: upload CSVs to Colab, select GPU runtime, run, download the zip, unzip into `backend/data/models/router/` (share through Google Drive, it is not committed).
+1. `ml/train_router.py`: load `train.csv`, `val.csv`; normalise text with the csebuetnlp `normalize()`; tokenizer + `AutoModelForSequenceClassification.from_pretrained("csebuetnlp/banglabert", num_labels=9)`; a plain PyTorch loop (AdamW, linear warm-up, batch 32, max length 64; no `datasets`/`accelerate` needed), eval each epoch, keep best by macro-F1; report test.csv; save model, tokenizer, `labels.json` into `backend/data/models/router/`. Runs on a normal CPU (about 10 to 20 minutes) and uses a GPU automatically if there is one.
+2. `ml/README.md`: how to run it on your PC (recommended) or on Colab, and how to share the model folder through Google Drive (it is not committed).
 
-**Done-check:** Colab prints val accuracy and macro-F1; the zip is in Drive.
+**Done-check:** the run prints val accuracy and macro-F1 per epoch and the test result; `backend/data/models/router/` holds the model and `labels.json`.
 
 ---
 

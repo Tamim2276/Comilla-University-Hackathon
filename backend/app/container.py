@@ -229,6 +229,7 @@ class Container:
             llm=self.llm,
             services=self.services_by_id,
             confidence_threshold=s.router_confidence_threshold,
+            voice_fast_mode=s.voice_fast_mode,
             llm_backend=s.llm_backend,
         )
 

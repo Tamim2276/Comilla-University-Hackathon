@@ -1,4 +1,4 @@
-"""Prompt templates and JSON schemas for the agent's LLM calls (SRS Appendix B, FR-AGT-03, 08).
+"""Prompt templates and JSON schemas for the agent's LLM calls (SRS Appendix B, FR-AGT-03, 06 to 10).
 
 Passages are shown as `[P1] title: text` so claims can cite `P1`. Instructions are in English
 (models follow them best); everything the citizen sees must come back in Bangla.
@@ -54,7 +54,10 @@ Conversation so far (use it to understand short replies such as "হ্যাঁ
 
 Latest question: {question}
 
-Return JSON with `service_id` (one label) and `confidence` (0 to 1)."""
+Return JSON with `service_id` (one label), `confidence` (0 to 1) and `search_query`: the latest
+question rewritten in Bangla as one complete question that makes sense without the conversation
+(for example "আর কোথায় জমা দেবো?" after a widow allowance question -> "বিধবা ভাতার আবেদন কোথায়
+জমা দিতে হয়?")."""
 
 
 def classify_schema(labels: Sequence[str]) -> dict[str, Any]:
@@ -63,6 +66,7 @@ def classify_schema(labels: Sequence[str]) -> dict[str, Any]:
         "properties": {
             "service_id": {"type": "string", "enum": list(labels)},
             "confidence": {"type": "number"},
+            "search_query": {"type": "string"},
         },
         "required": ["service_id", "confidence"],
     }
@@ -172,3 +176,99 @@ def build_generate_prompt(
         channel_rule=_VOICE_RULE if channel is Channel.VOICE else _APP_RULE,
         decision_note=DECISION_NOTE,
     )
+
+
+# ---------------------------------------------------------------- grade (FR-AGT-06)
+
+GRADE_PROMPT = """You check search results for a Bangla helpline about Bangladesh government services.
+Citizen's question: {question}
+
+Passages:
+{passages}
+
+Return the IDs of the passages that contain information useful for answering the question
+(rules, eligibility, papers, fees, offices, steps or amounts on the same topic). Be generous:
+partly useful counts. Return an empty list only when none of them is about the question."""
+
+GRADE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {"relevant_ids": {"type": "array", "items": {"type": "string"}}},
+    "required": ["relevant_ids"],
+}
+
+
+def build_grade_prompt(question: str, passages: Sequence[Passage]) -> str:
+    return GRADE_PROMPT.format(question=question, passages=format_passages(passages))
+
+
+# ---------------------------------------------------------------- rewrite_query (FR-AGT-07)
+
+REWRITE_PROMPT = """A search over official Bangla documents about "{service_name}" found nothing useful
+for the citizen's question. Rewrite it as one clear, formal Bangla search query (the words an
+official document would use), keeping the meaning. Use the conversation to fill in what a short
+reply refers to. Previous query: {query}
+
+Conversation so far:
+{history}
+
+Citizen's question: {question}
+
+Return JSON with `query`."""
+
+REWRITE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {"query": {"type": "string"}},
+    "required": ["query"],
+}
+
+
+def build_rewrite_prompt(question: str, query: str, service: Service, history: Sequence[Message]) -> str:
+    return REWRITE_PROMPT.format(
+        service_name=f"{service.name_bn} ({service.name_en})",
+        query=query,
+        history=format_history(history),
+        question=question,
+    )
+
+
+# ---------------------------------------------------------------- verify (FR-AGT-10)
+
+VERIFY_PROMPT = """You are a strict fact checker for a Bangla helpline about government services.
+Check every numbered claim, and the spoken answer, against the official passages ONLY.
+A claim is supported when a passage states the same fact (other wording is fine). Numbers,
+ages, amounts and fees must have the same value; Bangla digits, English digits and numbers
+written as words are the same (৬৫ = 65 = পঁয়ষট্টি). Repeating what the citizen said about
+themselves (for example their age), conditional wording ("পুরুষ হলে ...") and general advice
+such as "contact the office" or "the office decides" count as supported.
+
+Passages:
+{passages}
+
+Claims:
+{claims}
+
+Spoken answer: {speech}
+
+Return JSON: `claims` = one item per claim with its `index` and `supported` (true/false), and
+`speech_supported` = false if the spoken answer states any fact the passages do not support."""
+
+VERIFY_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "claims": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"index": {"type": "integer"}, "supported": {"type": "boolean"}},
+                "required": ["index", "supported"],
+            },
+        },
+        "speech_supported": {"type": "boolean"},
+    },
+    "required": ["claims", "speech_supported"],
+}
+
+
+def build_verify_prompt(claims: Sequence[str], speech: str, passages: Sequence[Passage]) -> str:
+    numbered = "\n".join(f"{i}. {text}" for i, text in enumerate(claims)) or "(none)"
+    return VERIFY_PROMPT.format(passages=format_passages(passages), claims=numbered, speech=speech)

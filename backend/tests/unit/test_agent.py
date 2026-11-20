@@ -1,16 +1,18 @@
-"""Agent v1 (D1-T4): routing branches, steps and the whole LangGraph flow with fakes. No network.
+"""The agent (D1-T4, D1-T5): routing branches, steps and the whole LangGraph flow with fakes. No network.
 
-FR-AGT-01 to 05, 08, 12, 13, 17.
+FR-AGT-01 to 14, 17.
 """
 
 import dataclasses
+from collections.abc import Mapping
 from typing import Any
 
 import pytest
 
 from app.application.agent import prompts, routing, steps
-from app.application.agent.state import AgentState
+from app.application.agent.state import AgentState, merge_timings
 from app.application.agent.steps import AgentDeps
+from app.application.ports.llm import ModelRole
 from app.application.ports.retrieval import Passage
 from app.domain.entities import Message, Service
 from app.domain.errors import ClassifierUnavailable, LLMUnavailable
@@ -45,6 +47,35 @@ GOOD_DRAFT: dict[str, Any] = {
     ],
     "follow_up_question": "",
 }
+NO_ANSWER: dict[str, Any] = {"no_answer": True, "speech_text": "", "display_text": "", "claims": []}
+ALL_RELEVANT = {"relevant_ids": ["P1", "P2", "P3"]}
+ALL_SUPPORTED = {"claims": [{"index": i, "supported": True} for i in range(3)], "speech_supported": True}
+
+
+class StepLLM(FakeLLM):
+    """Answers each agent step from its own queue, chosen by the JSON schema of the call."""
+
+    def __init__(self, **queues: list[dict[str, Any]]) -> None:
+        super().__init__(handler=self._answer)
+        self.queues = {step: list(replies) for step, replies in queues.items()}
+        self.steps: list[str] = []
+
+    @staticmethod
+    def step_of(schema: Mapping[str, Any]) -> str:
+        keys = set(schema.get("properties", {}))
+        for step, key in [("grade", "relevant_ids"), ("rewrite", "query"), ("verify", "speech_supported"),
+                          ("generate", "no_answer"), ("classify", "service_id")]:  # fmt: skip
+            if key in keys:
+                return step
+        raise AssertionError(f"unknown schema {keys}")
+
+    def _answer(self, prompt: str, schema: Mapping[str, Any], role: ModelRole) -> dict[str, Any]:
+        step = self.step_of(schema)
+        self.steps.append(step)
+        queue = self.queues.get(step) or []
+        if not queue:
+            raise AssertionError(f"no scripted reply left for {step}")
+        return queue.pop(0) if len(queue) > 1 else queue[0]  # the last reply repeats
 
 
 def deps(
@@ -52,13 +83,16 @@ def deps(
     llm: FakeLLM | None = None,
     passages: list[Passage] | None = None,
     classifier: Any = None,
+    fast: bool = True,
 ) -> AgentDeps:
     return AgentDeps(
         classifier=classifier or FakeClassifier(scores or {"old_age_allowance": 0.95, "other": 0.05}),
         retriever=FakeRetriever(PASSAGES if passages is None else passages),
-        llm=llm or FakeLLM([GOOD_DRAFT]),
+        llm=llm or StepLLM(grade=[ALL_RELEVANT], generate=[GOOD_DRAFT], verify=[ALL_SUPPORTED]),
         services=SERVICES,
         confidence_threshold=0.7,
+        max_retries=2,
+        voice_fast_mode=fast,
         llm_backend="gemini",
     )
 
@@ -95,19 +129,61 @@ def test_after_llm_classify() -> None:
     assert routing.after_llm_classify({"service_id": "widow_allowance"}) == routing.RETRIEVE
 
 
+def test_after_retrieve_skips_grading_only_in_fast_mode() -> None:
+    assert routing.after_retrieve({}, fast_mode=True) == routing.GENERATE
+    assert routing.after_retrieve({}, fast_mode=False) == routing.GRADE
+
+
 @pytest.mark.parametrize(
     ("state", "expected"),
     [
-        ({"draft": {"no_answer": True}}, routing.FALLBACK),
-        ({"draft": {"no_answer": False, "speech_text": "  "}}, routing.FALLBACK),
-        ({"draft": GOOD_DRAFT}, routing.FINALIZE),
+        ({"relevant_ids": ["P1"]}, routing.GENERATE),
+        ({"relevant_ids": [], "retries": 0}, routing.REWRITE_QUERY),  # FR-AGT-07
+        ({"relevant_ids": [], "retries": 2}, routing.FALLBACK),
+    ],
+)
+def test_after_grade(state: AgentState, expected: str) -> None:
+    assert routing.after_grade(state, max_retries=2) == expected
+
+
+@pytest.mark.parametrize(
+    ("state", "expected"),
+    [
+        ({"draft": NO_ANSWER, "retries": 1}, routing.REWRITE_QUERY),
+        ({"draft": NO_ANSWER, "retries": 2}, routing.FALLBACK),
+        ({"draft": {"no_answer": False, "speech_text": "  "}, "retries": 2}, routing.FALLBACK),
+        ({"draft": GOOD_DRAFT}, routing.VERIFY),
         ({"draft": {**GOOD_DRAFT, "follow_up_question": "আপনি কি স্থায়ী বাসিন্দা?"}}, routing.FINALIZE_FOLLOW_UP),
         ({"draft": {**GOOD_DRAFT, "follow_up_question": "আবার?"}, "pending_service_id": "widow_allowance"},
-         routing.FINALIZE),  # FR-AGT-09: only one follow-up
+         routing.VERIFY),  # FR-AGT-09: only one follow-up
     ],
 )  # fmt: skip
 def test_after_generate(state: AgentState, expected: str) -> None:
-    assert routing.after_generate(state) == expected
+    assert routing.after_generate(state, max_retries=2) == expected
+
+
+def claim(core: bool, supported: bool) -> dict[str, Any]:
+    return {"text": "x", "core": core, "supported": supported}
+
+
+@pytest.mark.parametrize(
+    ("state", "expected"),
+    [
+        ({"verified_claims": [claim(True, True), claim(False, False)], "speech_supported": True},
+         routing.FINALIZE),
+        ({"verified_claims": [claim(True, False)], "retries": 0}, routing.REWRITE_QUERY),  # FR-AGT-10
+        ({"verified_claims": [claim(True, False)], "retries": 2}, routing.FALLBACK),
+        ({"verified_claims": [claim(True, True)], "speech_supported": False, "retries": 2}, routing.FALLBACK),
+        ({"verified_claims": [], "retries": 2}, routing.FALLBACK),  # nothing reliable left
+    ],
+)  # fmt: skip
+def test_after_verify(state: AgentState, expected: str) -> None:
+    assert routing.after_verify(state, max_retries=2) == expected
+
+
+def test_timings_add_up_when_a_step_runs_twice() -> None:
+    merged = merge_timings({"retrieve": 10.0}, {"retrieve": 5.5, "grade": 1.0})
+    assert merged == {"retrieve": 15.5, "grade": 1.0}
 
 
 # ---------------------------------------------------------------- steps
@@ -165,11 +241,57 @@ def test_llm_classify_gets_hints_and_history_and_rejects_unknown_labels() -> Non
     assert steps.llm_classify(state, d)["service_id"] == "other"
 
 
+def test_llm_classify_turns_a_context_question_into_a_standalone_query() -> None:
+    llm = FakeLLM([{"service_id": "widow_allowance", "confidence": 0.85,
+                    "search_query": "বিধবা ভাতার আবেদন কোথায় জমা দিতে হয়?"}])  # fmt: skip
+    out = steps.llm_classify({"question": "আর কোথায় জমা দেবো?", "history": []}, deps(llm=llm))
+    assert out["query"] == "বিধবা ভাতার আবেদন কোথায় জমা দিতে হয়?"
+
+
 def test_retrieve_searches_the_chosen_service() -> None:
     d = deps()
     out = steps.retrieve({"question": "q", "query": "rewritten", "service_id": "old_age_allowance"}, d)
     assert len(out["passages"]) == 3
     assert d.retriever.searches == [("rewritten", "old_age_allowance", 5)]  # type: ignore[attr-defined]
+
+
+def test_grade_keeps_only_relevant_passages_and_renumbers_them() -> None:  # FR-AGT-06
+    llm = FakeLLM([{"relevant_ids": ["[p3]", "P1", "P7"]}])
+    out = steps.grade({"question": "q", "passages": PASSAGES}, deps(llm=llm))
+    assert [p.chunk_id for p in out["passages"]] == ["old_age_allowance-001", "old_age_allowance-003"]
+    assert out["relevant_ids"] == ["P1", "P2"] and out["llm_calls"] == 1
+    assert llm.roles == [ModelRole.FAST]
+
+
+def test_grade_without_passages_skips_the_llm() -> None:
+    out = steps.grade({"question": "q", "passages": []}, deps(llm=FakeLLM(fail=True)))
+    assert out == {"relevant_ids": []}
+
+
+def test_rewrite_query_counts_a_retry_and_falls_back_to_the_question() -> None:  # FR-AGT-07
+    llm = FakeLLM([{"query": "বয়স্ক ভাতার আবেদনের যোগ্যতা"}, {"query": "  "}])
+    state: AgentState = {
+        "question": "ভাতা কবে?", "service_id": "old_age_allowance", "retries": 1, "history": [],
+    }  # fmt: skip
+    assert steps.rewrite_query(state, deps(llm=llm)) == {
+        "query": "বয়স্ক ভাতার আবেদনের যোগ্যতা", "retries": 2, "llm_calls": 1,
+    }  # fmt: skip
+    assert steps.rewrite_query(state, deps(llm=llm))["query"] == "ভাতা কবে?"
+
+
+def test_verify_marks_each_claim_and_defaults_missing_verdicts_to_unsupported() -> None:  # FR-AGT-10
+    llm = FakeLLM([{"claims": [{"index": 0, "supported": True}, {"index": 2, "supported": True}],
+                    "speech_supported": True}])  # fmt: skip
+    out = steps.verify({"draft": GOOD_DRAFT, "passages": PASSAGES}, deps(llm=llm))
+    assert [c["supported"] for c in out["verified_claims"]] == [True, False, True]
+    assert out["speech_supported"] is True and out["llm_calls"] == 1
+    assert llm.roles == [ModelRole.MAIN]
+    assert "0. বয়স 65" in llm.prompts[0] and "[P1]" in llm.prompts[0]
+
+
+def test_verify_without_claims_is_not_reliable() -> None:
+    out = steps.verify({"draft": {**GOOD_DRAFT, "claims": []}}, deps(llm=FakeLLM(fail=True)))
+    assert out == {"verified_claims": [], "speech_supported": False}
 
 
 def test_generate_without_passages_skips_the_llm() -> None:
@@ -201,6 +323,14 @@ def test_finalize_builds_a_valid_answer() -> None:  # FR-AGT-08, 11, 12
     assert answer.llm_backend == "gemini"
 
 
+def test_finalize_cites_only_passages_behind_supported_claims() -> None:
+    verified = [{**c, "supported": i != 2} for i, c in enumerate(GOOD_DRAFT["claims"])]  # P3 claim dropped
+    state: AgentState = {"draft": GOOD_DRAFT, "service_id": "old_age_allowance", "passages": PASSAGES,
+                         "verified_claims": verified}  # fmt: skip
+    citations = steps.finalize(state, deps())["answer"].citations
+    assert [c.source_url for c in citations] == ["https://dss.gov.bd/a"]
+
+
 def test_finalize_cites_the_best_passage_when_claims_cite_nothing() -> None:
     draft = {**GOOD_DRAFT, "claims": []}
     state: AgentState = {"draft": draft, "service_id": "old_age_allowance", "passages": PASSAGES}
@@ -218,38 +348,79 @@ def test_fallback_uses_the_exact_text_and_hides_other() -> None:  # FR-AGT-13
 # ---------------------------------------------------------------- the whole graph
 
 
-def test_engine_answers_a_confident_question_with_one_llm_call() -> None:
-    engine = LangGraphAnswerEngine(deps())
-    answer = engine.answer("আমার বয়স ৬৭, বয়স্ক ভাতা পাবো?", [], Channel.APP)
+def test_app_question_runs_grade_generate_verify() -> None:
+    llm = StepLLM(grade=[ALL_RELEVANT], generate=[GOOD_DRAFT], verify=[ALL_SUPPORTED])
+    answer = LangGraphAnswerEngine(deps(llm=llm)).answer("আমার বয়স ৬৭, বয়স্ক ভাতা পাবো?", [], Channel.APP)
     assert answer.status is AnswerStatus.ANSWERED and answer.service_id == "old_age_allowance"
-    assert answer.router_source is RouterSource.TFIDF and answer.llm_calls == 1
-    assert set(answer.timings) == {"classify", "retrieve", "generate", "finalize", "total"}  # FR-AGT-14
+    assert llm.steps == ["grade", "generate", "verify"] and answer.llm_calls == 3
+    assert set(answer.timings) == {"classify", "retrieve", "grade", "generate", "verify", "finalize", "total"}
 
 
-def test_engine_sends_other_to_fallback_without_rag() -> None:
+def test_voice_fast_mode_uses_two_llm_calls() -> None:  # D1-T5 target
+    llm = StepLLM(generate=[GOOD_DRAFT], verify=[ALL_SUPPORTED])
+    answer = LangGraphAnswerEngine(deps(llm=llm)).answer("বয়স্ক ভাতা?", [], Channel.VOICE)
+    assert answer.status is AnswerStatus.ANSWERED
+    assert llm.steps == ["generate", "verify"] and answer.llm_calls == 2
+
+
+def test_voice_grades_when_fast_mode_is_off() -> None:
+    llm = StepLLM(grade=[ALL_RELEVANT], generate=[GOOD_DRAFT], verify=[ALL_SUPPORTED])
+    LangGraphAnswerEngine(deps(llm=llm, fast=False)).answer("বয়স্ক ভাতা?", [], Channel.VOICE)
+    assert llm.steps[0] == "grade"
+
+
+def test_empty_grade_rewrites_and_retries_then_answers() -> None:
+    llm = StepLLM(grade=[{"relevant_ids": []}, ALL_RELEVANT], rewrite=[{"query": "বয়স্ক ভাতার যোগ্যতা"}],
+                  generate=[GOOD_DRAFT], verify=[ALL_SUPPORTED])  # fmt: skip
+    d = deps(llm=llm)
+    answer = LangGraphAnswerEngine(d).answer("ভাতা কবে পাবো?", [], Channel.APP)
+    assert answer.status is AnswerStatus.ANSWERED
+    assert llm.steps == ["grade", "rewrite", "grade", "generate", "verify"]
+    queries = [q for q, _, _ in d.retriever.searches]  # type: ignore[attr-defined]
+    assert queries == ["ভাতা কবে পাবো?", "বয়স্ক ভাতার যোগ্যতা"]
+
+
+def test_gives_up_after_two_retries_with_the_exact_fallback() -> None:  # S7
+    llm = StepLLM(grade=[{"relevant_ids": []}], rewrite=[{"query": "আবার খোঁজো"}])
+    answer = LangGraphAnswerEngine(deps(llm=llm)).answer("বয়স্ক ভাতার অফিস কখন খোলে?", [], Channel.APP)
+    assert answer.status is AnswerStatus.FALLBACK and answer.speech_text == FALLBACK
+    assert llm.steps == ["grade", "rewrite", "grade", "rewrite", "grade"]  # one shared counter, max 2
+
+
+def test_voice_no_answer_rewrites_like_an_empty_grade() -> None:
+    llm = StepLLM(generate=[NO_ANSWER, GOOD_DRAFT], rewrite=[{"query": "বয়স্ক ভাতা"}], verify=[ALL_SUPPORTED])
+    answer = LangGraphAnswerEngine(deps(llm=llm)).answer("ভাতা?", [], Channel.VOICE)
+    assert answer.status is AnswerStatus.ANSWERED
+    assert llm.steps == ["generate", "rewrite", "generate", "verify"]
+
+
+def test_unsupported_core_claim_retries_then_falls_back() -> None:  # FR-AGT-10
+    bad = {"claims": [{"index": 0, "supported": False}], "speech_supported": True}
+    llm = StepLLM(grade=[ALL_RELEVANT], generate=[GOOD_DRAFT], verify=[bad], rewrite=[{"query": "q2"}])
+    answer = LangGraphAnswerEngine(deps(llm=llm)).answer("বয়স্ক ভাতা?", [], Channel.APP)
+    assert answer.status is AnswerStatus.FALLBACK
+    assert llm.steps.count("verify") == 3 and llm.steps.count("rewrite") == 2
+
+
+def test_other_goes_to_fallback_without_rag() -> None:
     d = deps(scores={"other": 0.9, "old_age_allowance": 0.1}, llm=FakeLLM(fail=True))
     answer = LangGraphAnswerEngine(d).answer("আজ বৃষ্টি হবে?", [], Channel.APP)
     assert answer.status is AnswerStatus.FALLBACK and answer.llm_calls == 0
     assert d.retriever.searches == []  # type: ignore[attr-defined]
 
 
-def test_engine_asks_the_llm_when_the_router_is_unsure() -> None:
-    llm = FakeLLM([{"service_id": "old_age_allowance", "confidence": 0.8}, GOOD_DRAFT])
+def test_unsure_router_asks_the_llm_first() -> None:
+    llm = StepLLM(classify=[{"service_id": "old_age_allowance", "confidence": 0.8}],
+                  generate=[GOOD_DRAFT], verify=[ALL_SUPPORTED])  # fmt: skip
     d = deps(scores={"old_age_allowance": 0.4, "other": 0.35}, llm=llm)
     answer = LangGraphAnswerEngine(d).answer("ভাতা নিয়ে জানতে চাই", [], Channel.VOICE)
-    assert answer.router_source is RouterSource.LLM and answer.llm_calls == 2
-    assert "llm_classify" in answer.timings
+    assert answer.router_source is RouterSource.LLM and answer.llm_calls == 3
+    assert llm.steps == ["classify", "generate", "verify"]
 
 
-def test_engine_falls_back_when_the_passages_do_not_answer() -> None:
-    d = deps(llm=FakeLLM([{"no_answer": True, "speech_text": "", "display_text": "", "claims": []}]))
-    answer = LangGraphAnswerEngine(d).answer("বয়স্ক ভাতার অফিস কখন খোলে?", [], Channel.APP)
-    assert answer.status is AnswerStatus.FALLBACK and answer.service_id == "old_age_allowance"
-
-
-def test_engine_follow_up_then_answer_keeps_the_service() -> None:  # S2
+def test_follow_up_then_answer_keeps_the_service() -> None:  # S2
     follow = {**GOOD_DRAFT, "follow_up_question": "আপনি কি এই এলাকার স্থায়ী বাসিন্দা?"}
-    llm = FakeLLM([follow, GOOD_DRAFT])
+    llm = StepLLM(generate=[follow, GOOD_DRAFT], verify=[ALL_SUPPORTED])
     widow_passage = dataclasses.replace(PASSAGES[0], service_id="widow_allowance")
     engine = LangGraphAnswerEngine(
         deps(scores={"widow_allowance": 0.9, "other": 0.1}, llm=llm, passages=[widow_passage])
@@ -262,7 +433,7 @@ def test_engine_follow_up_then_answer_keeps_the_service() -> None:  # S2
     assert second.router_source is RouterSource.CONTEXT
 
 
-def test_engine_lets_llm_errors_reach_the_caller() -> None:  # S9: the API turns it into the ERROR text
+def test_llm_errors_reach_the_caller() -> None:  # S9: the API turns it into the ERROR text
     with pytest.raises(LLMUnavailable):
         LangGraphAnswerEngine(deps(llm=FakeLLM(fail=True))).answer("বয়স্ক ভাতা?", [], Channel.APP)
 

@@ -1,7 +1,8 @@
 """Which step runs next (SRS 7.4). Pure functions of the state, so each branch is easy to test.
 
-v1 (D1-T4): classify -> (llm_classify) -> retrieve -> generate -> finalize | finalize_follow_up,
-and fallback for `other` or `no_answer`. D1-T5 adds grade, rewrite_query and verify.
+classify -> (llm_classify) -> retrieve -> grade -> generate -> verify -> finalize, with
+rewrite_query -> retrieve loops sharing one `retries` counter, finalize_follow_up for a missing
+fact, and fallback for `other` or when nothing reliable is left. Voice fast mode skips grade.
 """
 
 from app.application.agent.state import AgentState
@@ -12,10 +13,17 @@ OTHER = "other"
 CLASSIFY = "classify"
 LLM_CLASSIFY = "llm_classify"
 RETRIEVE = "retrieve"
+GRADE = "grade"
+REWRITE_QUERY = "rewrite_query"
 GENERATE = "generate"
+VERIFY = "verify"
 FINALIZE = "finalize"
 FINALIZE_FOLLOW_UP = "finalize_follow_up"
 FALLBACK = "fallback"
+
+
+def _retry_or_fallback(state: AgentState, max_retries: int) -> str:
+    return REWRITE_QUERY if state.get("retries", 0) < max_retries else FALLBACK  # FR-AGT-07
 
 
 def after_classify(state: AgentState, threshold: float) -> str:
@@ -32,11 +40,30 @@ def after_llm_classify(state: AgentState) -> str:
     return FALLBACK if state.get("service_id") in (None, "", OTHER) else RETRIEVE  # FR-AGT-04
 
 
-def after_generate(state: AgentState) -> str:
+def after_retrieve(state: AgentState, fast_mode: bool) -> str:
+    """Voice fast mode skips grading: generate itself says `no_answer` (FR-AGT-06)."""
+    return GENERATE if fast_mode else GRADE
+
+
+def after_grade(state: AgentState, max_retries: int) -> str:
+    return GENERATE if state.get("relevant_ids") else _retry_or_fallback(state, max_retries)
+
+
+def after_generate(state: AgentState, max_retries: int) -> str:
     draft = state.get("draft") or {}
     if draft.get("no_answer") or not str(draft.get("speech_text", "")).strip():
-        return FALLBACK  # D1-T5: rewrite and retry first
+        return _retry_or_fallback(state, max_retries)
     follow_up = str(draft.get("follow_up_question") or "").strip()
     if follow_up and not state.get("pending_service_id"):  # FR-AGT-09: at most one follow-up
         return FINALIZE_FOLLOW_UP
-    return FINALIZE
+    return VERIFY
+
+
+def after_verify(state: AgentState, max_retries: int) -> str:
+    """All core claims and the spoken answer supported -> finalize; else retry, then fall back (FR-AGT-10)."""
+    claims = state.get("verified_claims") or []
+    supported = [c for c in claims if c.get("supported")]
+    core_failed = any(c.get("core") and not c.get("supported") for c in claims)
+    if supported and not core_failed and state.get("speech_supported", True):
+        return FINALIZE
+    return _retry_or_fallback(state, max_retries)

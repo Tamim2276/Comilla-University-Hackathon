@@ -19,8 +19,8 @@ from app.application.ports.retrieval import Passage, Retriever
 from app.domain.entities import Answer, Checklist, Citation, Message, Service
 from app.domain.errors import ClassifierUnavailable
 from app.domain.messages_bn import DECISION_NOTE, FALLBACK
-from app.domain.policies import ROUTER_CONFIDENCE_THRESHOLD, TOP_K
-from app.domain.value_objects import AnswerStatus, Role, RouterSource
+from app.domain.policies import MAX_RETRIEVAL_RETRIES, ROUTER_CONFIDENCE_THRESHOLD, TOP_K
+from app.domain.value_objects import AnswerStatus, Channel, Role, RouterSource
 
 log = logging.getLogger(__name__)
 
@@ -37,7 +37,12 @@ class AgentDeps:
     services: Mapping[str, Service]  # all 9 labels, `other` included
     confidence_threshold: float = ROUTER_CONFIDENCE_THRESHOLD
     top_k: int = TOP_K
+    max_retries: int = MAX_RETRIEVAL_RETRIES
+    voice_fast_mode: bool = True  # calls skip `grade` (FR-AGT-06)
     llm_backend: str | None = None  # FR-AGT-18: recorded on every answer
+
+    def fast_mode(self, channel: Channel | None) -> bool:
+        return self.voice_fast_mode and channel is Channel.VOICE
 
 
 # ---------------------------------------------------------------- small helpers
@@ -110,10 +115,14 @@ def llm_classify(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     label = _text(data.get("service_id"))
     if label not in deps.services:
         label = OTHER
-    return {
+    update: dict[str, Any] = {
         "service_id": label, "confidence": _clamp(data.get("confidence")),
         "router_source": RouterSource.LLM, "llm_calls": 1,
     }  # fmt: skip
+    standalone = _text(data.get("search_query"))
+    if standalone:  # "আর কোথায় জমা দেবো?" alone finds nothing; the full question does
+        update["query"] = standalone
+    return update
 
 
 def retrieve(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
@@ -136,8 +145,81 @@ def generate(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     return {"draft": data, "llm_calls": 1}
 
 
+def grade(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
+    """One FAST call for all passages; keeps only the useful ones for `generate` (FR-AGT-06)."""
+    passages = state.get("passages") or []
+    if not passages:
+        return {"relevant_ids": []}
+    data = deps.llm.generate_json(
+        prompts.build_grade_prompt(state["question"], passages),
+        prompts.GRADE_SCHEMA,
+        role=ModelRole.FAST,
+        temperature=0.0,
+    )
+    raw = data.get("relevant_ids") if isinstance(data.get("relevant_ids"), list) else []
+    wanted = {_text(pid).strip("[]").upper() for pid in raw}
+    kept = [p for i, p in enumerate(passages) if prompts.passage_id(i) in wanted]
+    return {
+        "relevant_ids": [prompts.passage_id(i) for i in range(len(kept))],
+        "passages": kept,
+        "llm_calls": 1,
+    }
+
+
+def rewrite_query(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
+    """A clearer, more formal search query, then retrieve again (FR-AGT-07). Counts one retry."""
+    question = state["question"]
+    data = deps.llm.generate_json(
+        prompts.build_rewrite_prompt(
+            question, state.get("query") or question, deps.services[state["service_id"]],
+            state.get("history", ()),
+        ),
+        prompts.REWRITE_SCHEMA,
+        role=ModelRole.FAST,
+        temperature=0.3,
+    )  # fmt: skip
+    query = _text(data.get("query")) or question
+    return {"query": query, "retries": state.get("retries", 0) + 1, "llm_calls": 1}
+
+
+def verify(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
+    """One MAIN call checks every claim and the spoken answer against the passages (FR-AGT-10)."""
+    draft = state["draft"]
+    claims = [c for c in draft.get("claims") or [] if isinstance(c, Mapping) and _text(c.get("text"))]
+    if not claims:
+        return {"verified_claims": [], "speech_supported": False}  # nothing checkable = not reliable
+    data = deps.llm.generate_json(
+        prompts.build_verify_prompt(
+            [_text(c.get("text")) for c in claims],
+            _text(draft.get("speech_text")),
+            state.get("passages") or [],
+        ),
+        prompts.VERIFY_SCHEMA,
+        role=ModelRole.MAIN,
+        temperature=0.0,
+    )
+    verdicts: dict[int, bool] = {}
+    for item in data.get("claims") or []:
+        if isinstance(item, Mapping) and isinstance(item.get("index"), int):
+            verdicts[item["index"]] = bool(item.get("supported"))
+    checked = [
+        {**c, "core": bool(c.get("core")), "supported": verdicts.get(i, False)} for i, c in enumerate(claims)
+    ]
+    unsupported = [c["text"] for c in checked if not c["supported"]]
+    if unsupported:
+        log.info("verify: %d of %d claims unsupported", len(unsupported), len(checked))
+    return {
+        "verified_claims": checked,
+        "speech_supported": bool(data.get("speech_supported", True)),
+        "llm_calls": 1,
+    }
+
+
 def finalize(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
-    """Turns the draft into an `answered` Answer with a checklist and citations (FR-AGT-12)."""
+    """Turns the checked draft into an `answered` Answer (FR-AGT-08, 12).
+
+    Unsupported non-core claims are dropped, so only passages behind supported claims are cited.
+    """
     draft = state["draft"]
     service = deps.services[state["service_id"]]
     speech = to_bangla_digits(trim_speech(_text(draft.get("speech_text"))))
@@ -152,10 +234,17 @@ def finalize(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
         confidence=_clamp(state.get("confidence")),
         router_source=state.get("router_source"),
         checklist=build_checklist(draft.get("checklist"), service),
-        citations=build_citations(draft.get("claims"), state.get("passages") or []),
+        citations=build_citations(_supported_claims(state), state.get("passages") or []),
         llm_backend=deps.llm_backend,
     )
     return {"answer": answer}
+
+
+def _supported_claims(state: AgentState) -> list[dict[str, Any]]:
+    verified = state.get("verified_claims")
+    if verified is None:  # not verified (follow-up path, tests): use the draft's claims
+        return list(state["draft"].get("claims") or [])
+    return [c for c in verified if c.get("supported")]
 
 
 def finalize_follow_up(state: AgentState, deps: AgentDeps) -> dict[str, Any]:

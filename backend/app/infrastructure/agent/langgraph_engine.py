@@ -42,7 +42,10 @@ class LangGraphAnswerEngine:
             routing.CLASSIFY: steps.classify,
             routing.LLM_CLASSIFY: steps.llm_classify,
             routing.RETRIEVE: steps.retrieve,
+            routing.GRADE: steps.grade,
+            routing.REWRITE_QUERY: steps.rewrite_query,
             routing.GENERATE: steps.generate,
+            routing.VERIFY: steps.verify,
             routing.FINALIZE: steps.finalize,
             routing.FINALIZE_FOLLOW_UP: steps.finalize_follow_up,
             routing.FALLBACK: steps.fallback,
@@ -50,7 +53,8 @@ class LangGraphAnswerEngine:
         for name, step in nodes.items():
             graph.add_node(name, self._timed(name, step))
 
-        threshold = self._deps.confidence_threshold
+        threshold, retries = self._deps.confidence_threshold, self._deps.max_retries
+        retry_targets = [routing.REWRITE_QUERY, routing.FALLBACK]
         graph.add_edge(START, routing.CLASSIFY)
         graph.add_conditional_edges(
             routing.CLASSIFY,
@@ -60,11 +64,26 @@ class LangGraphAnswerEngine:
         graph.add_conditional_edges(
             routing.LLM_CLASSIFY, routing.after_llm_classify, [routing.RETRIEVE, routing.FALLBACK]
         )
-        graph.add_edge(routing.RETRIEVE, routing.GENERATE)
+        graph.add_conditional_edges(
+            routing.RETRIEVE,
+            lambda state: routing.after_retrieve(state, self._deps.fast_mode(state.get("channel"))),
+            [routing.GRADE, routing.GENERATE],
+        )
+        graph.add_conditional_edges(
+            routing.GRADE,
+            lambda state: routing.after_grade(state, retries),
+            [routing.GENERATE, *retry_targets],
+        )
+        graph.add_edge(routing.REWRITE_QUERY, routing.RETRIEVE)
         graph.add_conditional_edges(
             routing.GENERATE,
-            routing.after_generate,
-            [routing.FINALIZE, routing.FINALIZE_FOLLOW_UP, routing.FALLBACK],
+            lambda state: routing.after_generate(state, retries),
+            [routing.VERIFY, routing.FINALIZE_FOLLOW_UP, *retry_targets],
+        )
+        graph.add_conditional_edges(
+            routing.VERIFY,
+            lambda state: routing.after_verify(state, retries),
+            [routing.FINALIZE, *retry_targets],
         )
         for last in (routing.FINALIZE, routing.FINALIZE_FOLLOW_UP, routing.FALLBACK):
             graph.add_edge(last, END)
