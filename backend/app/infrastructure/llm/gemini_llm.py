@@ -30,7 +30,8 @@ def _default_client_factory(timeout_s: float) -> ClientFactory:
         from google import genai
         from google.genai import types
 
-        return genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=int(timeout_s * 1000)))
+        options = types.HttpOptions(api_version="v1beta", timeout=int(timeout_s * 1000))
+        return genai.Client(api_key=api_key, http_options=options)
 
     return make
 
