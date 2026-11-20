@@ -14,7 +14,9 @@ PHONE = "01712345678"
 
 @pytest.fixture
 def client() -> Iterator[TestClient]:
-    settings = Settings(_env_file=None, database_url="sqlite://", phone_hash_salt="test-salt")
+    settings = Settings(
+        _env_file=None, database_url="sqlite://", phone_hash_salt="test-salt", agent_engine="stub"
+    )
     with TestClient(create_app(settings)) as c:
         yield c
 

@@ -39,8 +39,8 @@ Each person follows their own rows top to bottom. A step only needs the steps ab
 | 8 | D1-R2 | Seed, test and out-of-scope questions | Tamim | 3 | done |
 | 9 | D1-T3 | Gemini, Ollama and hybrid LLM adapters | Tamim | 3 | done (live Gemini check passed 21 Nov) |
 | 10 | D0-1 | Move the work to the new team repository | Tamim | 0 | done |
-| 11 | D1-R4 | Augmented questions + TF-IDF baseline | Tamim | 4 | |
-| 12 | D1-T4 | Agent v1 replaces the stub: Checkpoint 1 in Swagger | Tamim | 7 | |
+| 11 | D1-R4 | Augmented questions + TF-IDF baseline | Tamim | 4 | done (test 89.8%, val 78.8%) |
+| 12 | D1-T4 | Agent v1 replaces the stub: Checkpoint 1 in Swagger | Tamim | 7 | done |
 | 13 | D1-R3 | App pages + chat page: Checkpoint 1 in the app | Ariful | 4 | |
 | 14 | D1-A3 | Twilio voice, echo mode | Ragib | 4 | |
 | 15 | D1-A4 | SMS adapters, background runner, full AskQuestion | Ariful | 4 | |

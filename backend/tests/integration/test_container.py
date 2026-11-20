@@ -24,10 +24,13 @@ from app.infrastructure.retrieval.chunker import Chunk
 from tests.fakes import FakeEmbedder
 
 NO_CHROMA = Path(__file__).parent / "no_such_chroma_dir"
+NO_ROUTER = Path(__file__).parent / "no_such_router.joblib"
 
 
 def container_for(database_url: str = "sqlite://", chroma_dir: Path = NO_CHROMA) -> Container:
-    return Container(Settings(_env_file=None, database_url=database_url, chroma_dir=chroma_dir))
+    return Container(
+        Settings(_env_file=None, database_url=database_url, chroma_dir=chroma_dir, tfidf_model_path=NO_ROUTER)
+    )
 
 
 def test_creating_a_container_builds_nothing_yet() -> None:
