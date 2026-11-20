@@ -515,6 +515,7 @@ Error format for all endpoints: `{"error": {"code": "LLM_UNAVAILABLE", "message_
 | `CHROMA_DIR` | `data/chroma` | Vector store |
 | `RETRIEVAL_MIN_SCORE` | `0.80` | FR-AGT-05 similarity threshold (tune on real questions; e5 scores sit close together) |
 | `VOICE_FAST_MODE` | `true` | Merge grading into generation for calls |
+| `AGENT_ENGINE` | `langgraph` / `stub` | `stub` returns a fixed sample answer (development without keys) |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_NUMBER` | | Telephony |
 | `STT_LANGUAGE` | `bn-BD` | `<Gather language>` (fallback `bn-IN`) |
 | `TTS_VOICE`, `TTS_LANGUAGE` | `Google.bn-IN-Standard-A`, `bn-IN` | `<Say>` |

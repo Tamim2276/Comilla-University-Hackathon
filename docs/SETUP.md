@@ -54,7 +54,8 @@ Open `backend/.env` and fill in:
 | `PHONE_HASH_SALT`, `ADMIN_TOKEN` | Two different random strings: run `python -c "import secrets; print(secrets.token_urlsafe(32))"` twice. |
 | `LLM_BACKEND` | `ollama` if you installed Ollama (no keys needed), otherwise `gemini`. |
 | `GEMINI_API_KEYS` | Your Gemini key from Google AI Studio (comma separated if you have several). Tamim shares the team keys privately. |
-| `GEMINI_MODEL_MAIN`, `GEMINI_MODEL_FAST` | The Flash and Flash-Lite model names (Tamim sends them). |
+| `GEMINI_MODEL_MAIN`, `GEMINI_MODEL_FAST` | The model names Tamim sends (today both are `gemini-3.5-flash-lite`: the Flash models answer too slowly for a call). |
+| `AGENT_ENGINE` | `langgraph` = the real agent (needs a working LLM). `stub` = a fixed sample answer, no keys or models needed: handy while you build the app or the call flow. |
 | Ragib | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_NUMBER` (from Tamim), `PUBLIC_URL` (your ngrok URL). |
 | Ariful | `SMS_BACKEND=textbee`, `TEXTBEE_API_KEY`, `TEXTBEE_DEVICE_ID` once the textbee phone works; until then keep `SMS_BACKEND=console`. |
 
@@ -69,11 +70,15 @@ $env:PYTHONIOENCODING = "utf-8"           # so Bangla prints correctly in PowerS
 python -m scripts.check_docs
 python -m scripts.ingest
 python -m scripts.search "বয়স্ক ভাতার বয়স কত"
+python -m scripts.train_baseline
+python -m scripts.ask "আমার বয়স ৬৭, বয়স্ক ভাতা পাবো?"
 ```
 
 - `check_docs` may end with "not ready yet" because 3 birth registration links are still being collected. That is known and fine.
 - The first `ingest` downloads the e5 search model (about 470 MB) into `backend/data/models/e5`, then builds the index in `backend/data/chroma` (about 97 passages). Both folders are git-ignored.
 - The search should list an old-age allowance passage first.
+- `train_baseline` trains the TF-IDF router from `data/questions/train.csv` in a few seconds and saves `backend/data/models/tfidf_router.joblib` (git-ignored).
+- `ask` runs the real agent once and prints the service, the Bangla answer, the checklist and the sources. It needs a working LLM; the first question takes 15 to 35 s because the models load, later ones about 3 to 5 s.
 - If `ingest` says it "couldn't connect to huggingface.co" although your internet works, the variable `HF_HUB_OFFLINE` is set on your computer. In that terminal run `Remove-Item Env:HF_HUB_OFFLINE` (Linux / macOS: `unset HF_HUB_OFFLINE`) and run `ingest` again.
 
 ## 6. Backend: check that everything works
@@ -124,6 +129,7 @@ git checkout -b <your-name>/<step>-<short-name>      # for example ragib/d1-a3-v
 | `backend/requirements.txt` | `pip install -r requirements.txt` (venv active) |
 | `frontend/package.json` | `npm install` |
 | `backend/data/raw_docs/` | `python -m scripts.ingest` |
+| `backend/data/questions/train.csv` | `python -m scripts.train_baseline` |
 | `backend/.env.example` | copy the new variables into your `.env` |
 
 Before opening a pull request: `git pull origin main` into your branch, then `ruff check .`, `pytest -q` and (frontend) `npm run build`. Rules: `docs/BUILD_PLAN.md` Section 0.3.

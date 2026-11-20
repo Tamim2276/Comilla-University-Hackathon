@@ -10,6 +10,8 @@ from functools import cached_property
 from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.application.agent.steps import AgentDeps
+from app.application.ports.classifier import ServiceClassifier
 from app.application.ports.engine import AnswerEngine
 from app.application.ports.llm import LLM
 from app.application.ports.repositories import (
@@ -25,6 +27,7 @@ from app.application.use_cases.history import DeleteHistory, GetHistory
 from app.application.use_cases.services import ListServices
 from app.config import Settings
 from app.domain.entities import Service
+from app.infrastructure.agent.langgraph_engine import LangGraphAnswerEngine
 from app.infrastructure.agent.stub_engine import StubAnswerEngine
 from app.infrastructure.cache.answer_cache import SqlAnswerCache
 from app.infrastructure.catalog.yaml_services import load_services
@@ -39,6 +42,8 @@ from app.infrastructure.db.session import init_db, make_engine, make_session_fac
 from app.infrastructure.llm.gemini_llm import GeminiLLM
 from app.infrastructure.llm.ollama_llm import OllamaLLM
 from app.infrastructure.llm.routed_llm import RoutedLLM
+from app.infrastructure.ml.llm_classifier import LLMClassifier
+from app.infrastructure.ml.tfidf_classifier import TfidfClassifier
 from app.infrastructure.retrieval.chroma_retriever import ChromaRetriever
 from app.infrastructure.retrieval.e5_embedder import E5Embedder
 
@@ -146,7 +151,10 @@ class Container:
 
     @cached_property
     def answer_engine(self) -> AnswerEngine:
-        return StubAnswerEngine()  # replaced by the LangGraph agent in D1-T4
+        """AGENT_ENGINE: langgraph (the real agent, D1-T4) | stub (fixed sample answer, no keys needed)."""
+        if self.settings.agent_engine == "stub":
+            return StubAnswerEngine()
+        return LangGraphAnswerEngine(self.agent_deps)
 
     # ------------------------------------------------------------ use cases
 
@@ -189,6 +197,41 @@ class Container:
     # Planned here: classifier (tfidf | banglabert | llm), the LangGraph engine (replaces answer_engine
     # above), clusterer and cluster use cases (steps D1-R4, D1-T4, D1-T5, D2-T1, D2-T2, D2-T4).
 
+    @cached_property
+    def tfidf_classifier(self) -> TfidfClassifier:
+        return TfidfClassifier(self.settings.tfidf_model_path)  # loads the joblib on first use
+
+    @cached_property
+    def services_by_id(self) -> dict[str, Service]:
+        return {s.id: s for s in self.services}
+
+    @cached_property
+    def classifier(self) -> ServiceClassifier:
+        """ROUTER_BACKEND: tfidf (D1-R4) | llm (D1-T4) | banglabert (D2-T1, TF-IDF until then)."""
+        if self.settings.router_backend == "llm":
+            return LLMClassifier(self.llm, self.services_by_id)
+        if self.settings.router_backend == "banglabert":
+            log.warning("ROUTER_BACKEND=banglabert is not built yet (D2-T1); using tfidf")
+        return self.tfidf_classifier
+
+    def check_router(self) -> str:
+        """ok = the router can run; not_configured = train it first. Never loads a model."""
+        if self.settings.router_backend == "llm":
+            return self.check_llm()
+        return "ok" if self.tfidf_classifier.available else NOT_CONFIGURED
+
+    @cached_property
+    def agent_deps(self) -> AgentDeps:
+        s = self.settings
+        return AgentDeps(
+            classifier=self.classifier,
+            retriever=self.retriever,
+            llm=self.llm,
+            services=self.services_by_id,
+            confidence_threshold=s.router_confidence_threshold,
+            llm_backend=s.llm_backend,
+        )
+
     # ------------------------------------------------------------ health (NFR-REL-02)
 
     def check_db(self) -> str:
@@ -211,12 +254,12 @@ class Container:
             return "error"
 
     def health(self) -> dict[str, str]:
-        """Status of each part. The router reports not_configured until it is built."""
+        """Status of each part; not_configured / empty mean "set it up first", not "broken"."""
         parts = {
             "db": self.check_db(),
             "llm": self.check_llm(),
             "vector_db": self.check_vector_db(),
-            "router": NOT_CONFIGURED,
+            "router": self.check_router(),
         }
         parts["status"] = "ok" if parts["db"] == "ok" else "error"
         return parts

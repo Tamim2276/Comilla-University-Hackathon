@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     chroma_dir: Path = BACKEND_DIR / "data" / "chroma"
     services_file: Path = BACKEND_DIR / "data" / "services.yaml"
     voice_fast_mode: bool = True
+    agent_engine: Literal["langgraph", "stub"] = "langgraph"  # stub: fixed answer, no keys needed
 
     # --- Twilio (FR-CALL)
     twilio_account_sid: str = ""

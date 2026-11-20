@@ -17,7 +17,9 @@ from app.main import create_app
 def build_app() -> FastAPI:
     no_store = Path(__file__).parent / "no_store"  # never created: vector_db reports "empty"
     # Gemini with no keys: llm reports "not_configured" without any network call.
-    settings = Settings(_env_file=None, database_url="sqlite://", chroma_dir=no_store)
+    settings = Settings(
+        _env_file=None, database_url="sqlite://", chroma_dir=no_store, tfidf_model_path=no_store / "r.joblib"
+    )
     app = create_app(settings)
 
     # Test-only routes that fail on purpose, to check the error format.

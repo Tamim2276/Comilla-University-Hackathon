@@ -25,3 +25,9 @@ class RateLimited(DomainError):
 
 class LLMUnavailable(DomainError):
     code = "LLM_UNAVAILABLE"
+
+
+class ClassifierUnavailable(DomainError):
+    """The router model is missing or broken; the agent then asks the LLM to classify."""
+
+    code = "CLASSIFIER_UNAVAILABLE"
