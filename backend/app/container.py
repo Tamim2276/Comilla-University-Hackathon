@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.agent.steps import AgentDeps
 from app.application.ports.classifier import ServiceClassifier
+from app.application.ports.clustering import Clusterer
 from app.application.ports.engine import AnswerEngine
 from app.application.ports.llm import LLM
 from app.application.ports.repositories import (
@@ -26,6 +27,7 @@ from app.application.ports.repositories import (
     QuestionLogRepo,
 )
 from app.application.use_cases.ask_question import AskQuestion
+from app.application.use_cases.clusters import ListClusters, RebuildClusters
 from app.application.use_cases.history import DeleteHistory, GetHistory
 from app.application.use_cases.services import ListServices
 from app.config import Settings
@@ -46,6 +48,7 @@ from app.infrastructure.llm.gemini_llm import GeminiLLM
 from app.infrastructure.llm.ollama_llm import OllamaLLM
 from app.infrastructure.llm.routed_llm import RoutedLLM
 from app.infrastructure.ml.banglabert_classifier import BanglaBertClassifier
+from app.infrastructure.ml.kmeans_clusterer import KMeansClusterer
 from app.infrastructure.ml.llm_classifier import LLMClassifier
 from app.infrastructure.ml.tfidf_classifier import TfidfClassifier
 from app.infrastructure.retrieval.chroma_retriever import ChromaRetriever
@@ -200,6 +203,19 @@ class Container:
     # ------------------------------------------------------------ AI area
     # Planned here: classifier (tfidf | banglabert | llm), the LangGraph engine (replaces answer_engine
     # above), clusterer and cluster use cases (steps D1-R4, D1-T4, D1-T5, D2-T1, D2-T2, D2-T4).
+
+    @cached_property
+    def clusterer(self) -> Clusterer:
+        return KMeansClusterer()
+
+    @cached_property
+    def rebuild_clusters(self) -> RebuildClusters:
+        """FR-ADM-03: the same e5 embedder as the search; labels from the LLM, keywords as fallback."""
+        return RebuildClusters(self.question_logs, self.embedder, self.clusterer, self.clusters, self.llm)
+
+    @cached_property
+    def list_clusters(self) -> ListClusters:
+        return ListClusters(self.clusters)
 
     @cached_property
     def tfidf_classifier(self) -> TfidfClassifier:

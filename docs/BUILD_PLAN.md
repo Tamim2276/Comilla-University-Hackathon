@@ -56,7 +56,7 @@ Each person follows their own rows top to bottom. A step only needs the steps ab
 | 25 | D2-R2 | "Call me" button + answer audio (TTS) | Ragib | 2 | |
 | 26 | D2-A2 | Async voice answer + voice error paths | Ragib | 2 | |
 | 27 | D2-T4 | Answer cache in the agent + pre-warm | Tamim | 1 | done |
-| 28 | D2-T2 | K-Means clusters + cluster APIs | Tamim | 2 | |
+| 28 | D2-T2 | K-Means clusters + cluster APIs | Tamim | 2 | done |
 | 29 | D2-R5 | Cluster view in the dashboard | Ariful | 1 | |
 | 30 | D2-R4 | App polish, 360 px check, PWA | Ariful | 1 | |
 | 31 | D2-T3 | RAG evaluation + answer check | Tamim | 2 | |

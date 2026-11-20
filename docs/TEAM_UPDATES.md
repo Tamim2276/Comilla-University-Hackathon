@@ -6,6 +6,24 @@ Nothing secret belongs in this file. Keys and Twilio values are shared privately
 
 ---
 
+## 6. Question clusters API for the dashboard (D2-T2), 21 Nov
+
+**What changed**
+- `POST /api/v1/admin/clusters/rebuild` groups every logged question into topics: e5 embeddings, K-Means (k from 3 to 8 by silhouette score; a fixed 3 below 30 questions), and a short Bangla label per topic written by Gemini in one call (top keywords if Gemini is unavailable). It takes about 15 s for 100 questions. Response: `{"clusters": 8, "questions": 108, "labelled_by": "llm"}`.
+- `GET /api/v1/admin/clusters` returns the stored topics, biggest first:
+  `{"clusters": [{"id": 1, "label": "ভাতা পাওয়ার বয়সসীমা", "size": 19, "examples": ["...", "...", "..."]}]}`
+  (`examples` holds up to 3 typical questions). Before the first rebuild the list is empty.
+- Both need the `X-Admin-Token` header when `ADMIN_TOKEN` is set in `backend/.env`; without it they return 401 in the usual error JSON.
+
+**You need to**
+1. Pull `main` and merge it into your branch. No new settings.
+
+**Good to know**
+- Ariful (D2-R1, D2-R5): the cluster view calls these two routes; show the rebuild as a button with a loading state (it is slow). `routers/clusters.py` has its own copy of the token check for now. When your `require_admin_token` is in `routers/admin.py`, tell Tamim and he switches `clusters.py` to import yours (one line), so both admin routers share one check. Keep the same behaviour: no `ADMIN_TOKEN` set means open; otherwise the header must match.
+- Clusters only exist after a rebuild, and they reflect the questions logged so far; rebuild after seeding the demo data (D2-R3).
+
+---
+
 ## 5. BanglaBERT router (D2-T1), 21 Nov
 
 **What changed**
