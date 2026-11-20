@@ -51,7 +51,7 @@ Each person follows their own rows top to bottom. A step only needs the steps ab
 | 20 | D1-R7 | Mic input in the app | Ragib | 1 | |
 | 21 | D1-R6 | App flow tests + demo phrases | Ragib | 1 | |
 | 22 | D2-A1 | Call-back API, missed call, signature check | Ragib | 4 | |
-| 23 | D2-T1 | BanglaBERT adapter + router evaluation | Tamim | 3 | |
+| 23 | D2-T1 | BanglaBERT adapter + router evaluation | Tamim | 3 | done (93.5%, 95.4% after LLM, 34 ms) |
 | 24 | D2-R1 | Admin APIs + dashboard | Ariful | 4 | |
 | 25 | D2-R2 | "Call me" button + answer audio (TTS) | Ragib | 2 | |
 | 26 | D2-A2 | Async voice answer + voice error paths | Ragib | 2 | |

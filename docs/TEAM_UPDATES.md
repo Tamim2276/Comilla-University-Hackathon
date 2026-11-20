@@ -6,6 +6,24 @@ Nothing secret belongs in this file. Keys and Twilio values are shared privately
 
 ---
 
+## 5. BanglaBERT router (D2-T1), 21 Nov
+
+**What changed**
+- New router setting `ROUTER_BACKEND=banglabert` (now the default in `.env.example`). On our 108 hand-written test questions it routes 93.5 % correctly on its own (TF-IDF: 89.8 %), in about 35 ms, and it understands Banglish much better. Full results: `docs/results/router_eval.md`.
+- If the BanglaBERT model folder is missing on a laptop, the app automatically uses TF-IDF. Nothing breaks.
+- `/health` now names the router in use: `"router": "banglabert"`, `"tfidf"` or `"llm"` (as in SRS 8), instead of `"ok"`.
+
+**You need to**
+1. Pull `main` and merge it into your branch.
+2. In `backend/.env` set `ROUTER_BACKEND=banglabert`. Without the model folder you keep TF-IDF, which is fine for your work.
+3. Only the demo laptop needs the real model: Tamim shares the zipped `router` folder through Google Drive; unzip it to `backend/data/models/router/`.
+
+**Good to know**
+- Ariful: if the app or dashboard shows the `/health` result, the `router` value is now a name, not `ok`.
+- Router choice does not change the API response shape; `router` in the chat response was already `banglabert` / `tfidf` / `llm` / `context`.
+
+---
+
 ## 4. Answer cache and faster first question (D2-T4), 21 Nov
 
 **What changed**

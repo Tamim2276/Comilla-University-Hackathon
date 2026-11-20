@@ -79,6 +79,7 @@ python -m scripts.ask "আমার বয়স ৬৭, বয়স্ক ভ�
 - The first `ingest` downloads the e5 search model (about 470 MB) into `backend/data/models/e5`, then builds the index in `backend/data/chroma` (about 97 passages). Both folders are git-ignored.
 - The search should list an old-age allowance passage first.
 - `train_baseline` trains the TF-IDF router from `data/questions/train.csv` in a few seconds and saves `backend/data/models/tfidf_router.joblib` (git-ignored).
+- The better router is BanglaBERT (`ROUTER_BACKEND=banglabert`), but its model folder (about 450 MB) is not in git. Without it the app quietly uses TF-IDF, which is fine for development. To use it, get the zipped `router` folder from Tamim's Google Drive and unzip it to `backend/data/models/router/` (or train it yourself: `ml/README.md`). `/health` shows which router is in use.
 - `ask` runs the real agent once and prints the service, the Bangla answer, the checklist and the sources. It needs a working LLM; the first question takes 15 to 35 s because the models load, later ones about 3 to 5 s.
 - Before a demo or rehearsal: `python -m scripts.prewarm` asks the questions in `data/questions/demo_questions.txt` once and stores the answers for 24 hours; repeating them then takes well under a second and uses no Gemini quota.
 - If `ingest` says it "couldn't connect to huggingface.co" although your internet works, the variable `HF_HUB_OFFLINE` is set on your computer. In that terminal run `Remove-Item Env:HF_HUB_OFFLINE` (Linux / macOS: `unset HF_HUB_OFFLINE`) and run `ingest` again.

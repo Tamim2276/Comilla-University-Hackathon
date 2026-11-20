@@ -45,6 +45,7 @@ from app.infrastructure.db.session import init_db, make_engine, make_session_fac
 from app.infrastructure.llm.gemini_llm import GeminiLLM
 from app.infrastructure.llm.ollama_llm import OllamaLLM
 from app.infrastructure.llm.routed_llm import RoutedLLM
+from app.infrastructure.ml.banglabert_classifier import BanglaBertClassifier
 from app.infrastructure.ml.llm_classifier import LLMClassifier
 from app.infrastructure.ml.tfidf_classifier import TfidfClassifier
 from app.infrastructure.retrieval.chroma_retriever import ChromaRetriever
@@ -209,12 +210,25 @@ class Container:
         return {s.id: s for s in self.services}
 
     @cached_property
+    def banglabert_classifier(self) -> BanglaBertClassifier:
+        return BanglaBertClassifier(self.settings.router_model_dir)  # loads the model on first use
+
+    @cached_property
     def classifier(self) -> ServiceClassifier:
-        """ROUTER_BACKEND: tfidf (D1-R4) | llm (D1-T4) | banglabert (D2-T1, TF-IDF until then)."""
-        if self.settings.router_backend == "llm":
+        """ROUTER_BACKEND: banglabert (D2-T1) | tfidf (D1-R4) | llm (D1-T4).
+
+        BanglaBERT without its model folder falls back to TF-IDF, so a laptop that has not
+        downloaded the model still routes questions.
+        """
+        backend = self.settings.router_backend
+        if backend == "llm":
             return LLMClassifier(self.llm, self.services_by_id)
-        if self.settings.router_backend == "banglabert":
-            log.warning("ROUTER_BACKEND=banglabert is not built yet (D2-T1); using tfidf")
+        if backend == "banglabert":
+            if self.banglabert_classifier.available:
+                return self.banglabert_classifier
+            log.warning(
+                "ROUTER_BACKEND=banglabert but %s has no model; using tfidf", self.settings.router_model_dir
+            )
         return self.tfidf_classifier
 
     def warm_up(self) -> threading.Thread | None:
@@ -244,10 +258,13 @@ class Container:
         log.info("warm-up finished in %.1f s", time.perf_counter() - started)
 
     def check_router(self) -> str:
-        """ok = the router can run; not_configured = train it first. Never loads a model."""
-        if self.settings.router_backend == "llm":
-            return self.check_llm()
-        return "ok" if self.tfidf_classifier.available else NOT_CONFIGURED
+        """The router in use (banglabert | tfidf | llm, SRS 8), or not_configured / error. Loads nothing."""
+        backend = self.settings.router_backend
+        if backend == "llm":
+            return "llm" if self.check_llm() == "ok" else self.check_llm()
+        if backend == "banglabert" and self.banglabert_classifier.available:
+            return "banglabert"
+        return "tfidf" if self.tfidf_classifier.available else NOT_CONFIGURED
 
     @cached_property
     def agent_deps(self) -> AgentDeps:
