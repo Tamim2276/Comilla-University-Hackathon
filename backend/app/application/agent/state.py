@@ -38,6 +38,8 @@ class AgentState(TypedDict, total=False):
     draft: dict[str, Any]  # the generate step's JSON
     verified_claims: list[dict[str, Any]]  # draft claims, each with `supported` added by verify
     speech_supported: bool
+    display_supported: bool  # the screen text has no unsupported fact
+    unsupported_checklist: list[str]  # checklist fields to blank out ("who", "papers", "fee", ...)
     answer: Answer
     timings: Annotated[dict[str, float], merge_timings]
     llm_calls: Annotated[int, operator.add]

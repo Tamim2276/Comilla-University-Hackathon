@@ -95,7 +95,8 @@ services to rural and elderly citizens. Service: {service_name}. Channel: {chann
 Official passages (the ONLY allowed source of facts):
 {passages}
 
-Conversation so far:
+Conversation so far (ONLY to understand what the citizen means; earlier answers in it may be
+wrong or sample text, so never copy facts, amounts, fees or wording from them):
 {history}
 
 Citizen's question: {question}
@@ -252,8 +253,17 @@ Claims:
 
 Spoken answer: {speech}
 
-Return JSON: `claims` = one item per claim with its `index` and `supported` (true/false), and
-`speech_supported` = false if the spoken answer states any fact the passages do not support."""
+Screen text: {display}
+
+Checklist:
+{checklist}
+
+Return JSON: `claims` = one item per claim with its `index` and `supported` (true/false);
+`speech_supported` = false if the spoken answer states any fact the passages do not support;
+`display_supported` = false if the screen text states any fact the passages do not support;
+`unsupported_checklist` = the checklist fields (who, papers, fee, where, decision) that state a
+fact the passages do not support. "তথ্য পাওয়া যায়নি" (not found) is always supported. A fee such
+as "বিনামূল্যে" (free) is supported only if a passage says so."""
 
 VERIFY_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -267,11 +277,41 @@ VERIFY_SCHEMA: dict[str, Any] = {
             },
         },
         "speech_supported": {"type": "boolean"},
+        "display_supported": {"type": "boolean"},
+        "unsupported_checklist": {
+            "type": "array",
+            "items": {"type": "string", "enum": ["who", "papers", "fee", "where", "decision"]},
+        },
     },
-    "required": ["claims", "speech_supported"],
+    "required": ["claims", "speech_supported", "display_supported", "unsupported_checklist"],
 }
 
 
-def build_verify_prompt(claims: Sequence[str], speech: str, passages: Sequence[Passage]) -> str:
+CHECKLIST_FIELDS = ("who", "papers", "fee", "where", "decision")
+
+
+def format_checklist(checklist: Mapping[str, Any] | None) -> str:
+    lines = []
+    for field in CHECKLIST_FIELDS:
+        value = (checklist or {}).get(field)
+        if isinstance(value, list):
+            value = ", ".join(str(v) for v in value)
+        lines.append(f"- {field}: {value or '(empty)'}")
+    return "\n".join(lines)
+
+
+def build_verify_prompt(
+    claims: Sequence[str],
+    speech: str,
+    passages: Sequence[Passage],
+    display: str = "",
+    checklist: Mapping[str, Any] | None = None,
+) -> str:
     numbered = "\n".join(f"{i}. {text}" for i, text in enumerate(claims)) or "(none)"
-    return VERIFY_PROMPT.format(passages=format_passages(passages), claims=numbered, speech=speech)
+    return VERIFY_PROMPT.format(
+        passages=format_passages(passages),
+        claims=numbered,
+        speech=speech,
+        display=display or "(none)",
+        checklist=format_checklist(checklist),
+    )

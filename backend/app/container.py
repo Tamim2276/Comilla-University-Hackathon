@@ -134,7 +134,12 @@ class Container:
     @cached_property
     def gemini(self) -> GeminiLLM:
         s = self.settings
-        return GeminiLLM(s.gemini_key_list, s.gemini_model_main, s.gemini_model_fast)
+        return GeminiLLM(
+            s.gemini_key_list,
+            s.gemini_model_main,
+            s.gemini_model_fast,
+            fallback_model=s.gemini_model_fallback,
+        )
 
     @cached_property
     def ollama(self) -> OllamaLLM:
