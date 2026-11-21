@@ -6,6 +6,19 @@ Nothing secret belongs in this file. Keys and Twilio values are shared privately
 
 ---
 
+## 11. Trade licence: Dhaka South added, 21 Nov
+
+**What changed**
+- Trade licence now has two city corporations: Dhaka North (already there) and Dhaka South (new: how to apply, the papers, 3 days or 7 days, renewal at a Sonali Bank branch in 1 day, the online link). Answers say which corporation a rule belongs to; neither page gives a licence fee amount, so the agent says the fee depends on the type of business and does not invent a number.
+
+**You need to**
+1. Pull `main`, merge it into your branch, then in `backend/` run `python -m scripts.ingest`.
+
+**Good to know**
+- Trade licence checklists may show the fee as "depends on the type of business" or the standard unknown text. That is the honest answer with these documents.
+
+---
+
 ## 10. Land mutation: required papers, appeals and the Ministry circular in the search index, 21 Nov
 
 **What changed**
