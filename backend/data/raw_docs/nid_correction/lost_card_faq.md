@@ -7,7 +7,8 @@ collected_on: 2026-11-20
 <!--
 Official text typed by hand on 2026-11-20 from a screenshot of the tab "জাতীয় পরিচয়পত্র হারিয়ে গেলে
 করণীয়" on the NID services site. Only the "##" headings were added. The page says "ফি জানতে এখানে
-ক্লিক করুন"; the fee page itself is not copied yet (see the fee file when it is added).
+ক্লিক করুন"; that fee page is a calculator for one person's application, so the official rates
+come from the Election Commission's fee table (fees.md in this folder).
 -->
 
 ## ১। আইডি কার্ড হারিয়ে গিয়েছে। কিভাবে নতুন কার্ড পেতে পারি?

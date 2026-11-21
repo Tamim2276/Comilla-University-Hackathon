@@ -6,6 +6,21 @@ Nothing secret belongs in this file. Keys and Twilio values are shared privately
 
 ---
 
+## 9. NID: official fee table and form instructions in the search index, 21 Nov
+
+**What changed**
+- NID correction went from 5 to 12 documents (35 searchable passages, was 17), all from the Election Commission (ecs.gov.bd): the official fee table, the instructions of the correction form (which papers each kind of correction needs), the lost-card form with its instructions, and the forms for printing mistakes, moving the voter area and correcting or removing voter-list entries.
+- Questions about NID fees now get the real amounts with VAT, for example the first name correction costs fee 200 Taka plus 30 Taka VAT, and the source link in the answer is the Election Commission's fee table. Before, the answer only said that a fee exists.
+- Questions about papers (date of birth, name, parents' names, address, blood group) now cite the instructions of the correction form.
+
+**You need to**
+1. Pull `main`, merge it into your branch, then in `backend/` run `python -m scripts.ingest` (about a minute). It also clears your old cached answers.
+
+**Good to know**
+- Ariful: an NID answer's checklist `fee` can now be a longer text with several amounts (1st, 2nd, later time). Make sure the checklist card and the SMS text wrap it properly (the SMS formatter already shortens long lines).
+
+---
+
 ## 8. Birth registration documents complete, search index rebuilt, 21 Nov
 
 **What changed**
