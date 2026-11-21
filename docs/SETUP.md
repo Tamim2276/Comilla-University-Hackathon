@@ -55,6 +55,7 @@ Open `backend/.env` and fill in:
 | `LLM_BACKEND` | `ollama` if you installed Ollama (no keys needed), otherwise `gemini`. |
 | `GEMINI_API_KEYS` | Your Gemini key from Google AI Studio (comma separated if you have several). Tamim shares the team keys privately. |
 | `GEMINI_MODEL_MAIN`, `GEMINI_MODEL_FAST` | The model names Tamim sends (today both are `gemini-3.5-flash-lite`: the Flash models answer too slowly for a call). |
+| `GEMINI_MODEL_FALLBACK` | `gemini-3.1-flash-lite`: used once when the model above is overloaded ("high demand", HTTP 503) or out of quota. |
 | `AGENT_ENGINE` | `langgraph` = the real agent (needs a working LLM). `stub` = a fixed sample answer, no keys or models needed: handy while you build the app or the call flow. |
 | `PRELOAD_MODELS` | `true` = load the router and search models in the background when the server starts, so the first question is fast. `false` = load them on the first question. |
 | Ragib | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_NUMBER` (from Tamim), `PUBLIC_URL` (your ngrok URL). |

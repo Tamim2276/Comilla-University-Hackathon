@@ -17,7 +17,7 @@ Do these steps first. The numbered entries below (newest first, 11 down to 1) ex
 **2. Set up your laptop** (skip what is already done): `docs/SETUP.md` sections 1 to 6 (tools, venv, requirements). Troubleshooting: section 10.
 
 **3. Fill your `backend/.env`** (write each value right after the `=`, no comment on the same line)
-- From Tamim, privately: `GEMINI_API_KEYS`, `GEMINI_MODEL_MAIN=gemini-3.5-flash-lite`, `GEMINI_MODEL_FAST=gemini-3.5-flash-lite`. Also set `LLM_BACKEND=gemini`.
+- From Tamim, privately: `GEMINI_API_KEYS`, `GEMINI_MODEL_MAIN=gemini-3.5-flash-lite`, `GEMINI_MODEL_FAST=gemini-3.5-flash-lite`. Also set `LLM_BACKEND=gemini` and `GEMINI_MODEL_FALLBACK=gemini-3.1-flash-lite` (used when Gemini says "high demand", see entry 13).
 - Add these: `PRELOAD_MODELS=true`, `ROUTER_BACKEND=banglabert` (without the model folder it falls back to TF-IDF by itself), `AGENT_ENGINE=langgraph`.
 - No keys yet, or the key limit is reached? Use `AGENT_ENGINE=stub` (a fixed sample answer) and keep building. Nothing else changes for you.
 - Never commit `.env`, never paste keys into a chat that keeps history.
@@ -49,6 +49,26 @@ Do these steps first. The numbered entries below (newest first, 11 down to 1) ex
 
 **Later**
 - Later, deployment: Ariful puts the app on Vercel (set `VITE_API_URL` to the backend address Tamim gives you); the backend runs on the demo laptop with ngrok. Details when the time comes.
+
+---
+
+## 13. Wrong "ফি: বিনামূল্যে" in answers fixed; fewer "Gemini is not responding" errors, 21 Nov
+
+**What changed**
+- Ariful's screenshots showed an old age allowance answer with "ফি: বিনামূল্যে". No official document says that. It came from the **stub's sample answer** (shown when `AGENT_ENGINE=stub`) that was still in the same conversation: the agent copied it from the history.
+- Fixed in three ways: (1) the agent may use the conversation only to understand the question, never as a source of facts; (2) the verifier now also checks the screen text and each checklist field: an unsupported field becomes "তথ্য পাওয়া যায়নি", an unsupported screen text is replaced by the verified spoken answer; (3) the stub's answer is now labelled "(নমুনা উত্তর, পরীক্ষার জন্য)" so nobody mistakes it for a real answer.
+- "Gemini is not responding" (HTTP 503 "high demand") is per model. When it happens the backend now tries the same request once on a second model, `GEMINI_MODEL_FALLBACK`.
+- "ফি: তথ্য পাওয়া যায়নি" for the allowances is the **correct** answer: the official documents we have do not state a fee.
+
+**You need to**
+1. Pull `main` and merge it into your branch.
+2. Add to `backend/.env`: `GEMINI_MODEL_FALLBACK=gemini-3.1-flash-lite`
+3. Clear old test conversations that contain stub answers: in Swagger, `DELETE /api/v1/conversations/{phone}` for your test number (or delete `backend/data/ekcall.db` and restart; it is recreated empty).
+4. Run `python -m scripts.ingest` once (it also clears cached answers).
+
+**Good to know**
+- Ariful: when the backend still returns 503 (both models busy), the app shows the error message. That is the expected behaviour, not a bug. If "তথ্য পাওয়া যায়নি" lines look noisy on the card, the app may hide checklist lines with that exact value (your choice).
+- Use `AGENT_ENGINE=stub` only while building screens; switch back to `langgraph` and clear the conversation before checking real answers.
 
 ---
 

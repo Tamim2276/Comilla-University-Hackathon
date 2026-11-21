@@ -210,11 +210,14 @@ def verify(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     claims = [c for c in draft.get("claims") or [] if isinstance(c, Mapping) and _text(c.get("text"))]
     if not claims:
         return {"verified_claims": [], "speech_supported": False}  # nothing checkable = not reliable
+    checklist = draft.get("checklist") if isinstance(draft.get("checklist"), Mapping) else {}
     data = deps.llm.generate_json(
         prompts.build_verify_prompt(
             [_text(c.get("text")) for c in claims],
             _text(draft.get("speech_text")),
             state.get("passages") or [],
+            display=_text(draft.get("display_text")),
+            checklist=checklist,
         ),
         prompts.VERIFY_SCHEMA,
         role=ModelRole.MAIN,
@@ -230,9 +233,18 @@ def verify(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     unsupported = [c["text"] for c in checked if not c["supported"]]
     if unsupported:
         log.info("verify: %d of %d claims unsupported", len(unsupported), len(checked))
+    raw_fields = (
+        data.get("unsupported_checklist") if isinstance(data.get("unsupported_checklist"), list) else []
+    )
+    bad_fields = [f for f in (_text(x) for x in raw_fields) if f in prompts.CHECKLIST_FIELDS]
+    display_ok = bool(data.get("display_supported", True))
+    if bad_fields or not display_ok:
+        log.info("verify: checklist fields unsupported %s, screen text supported %s", bad_fields, display_ok)
     return {
         "verified_claims": checked,
         "speech_supported": bool(data.get("speech_supported", True)),
+        "display_supported": display_ok,
+        "unsupported_checklist": bad_fields,
         "llm_calls": 1,
     }
 
@@ -241,11 +253,14 @@ def finalize(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     """Turns the checked draft into an `answered` Answer (FR-AGT-08, 12).
 
     Unsupported non-core claims are dropped, so only passages behind supported claims are cited.
+    A screen text with an unsupported fact is replaced by the (verified) spoken answer, and
+    unsupported checklist fields become "তথ্য পাওয়া যায়নি".
     """
     draft = state["draft"]
     service = deps.services[state["service_id"]]
     speech = to_bangla_digits(trim_speech(_text(draft.get("speech_text"))))
-    display = _text(draft.get("display_text")) or speech
+    display = _text(draft.get("display_text")) if state.get("display_supported", True) else ""
+    display = display or speech
     if DECISION_NOTE not in display:
         display = f"{display}\n\n_{DECISION_NOTE}_"
     answer = Answer(
@@ -255,7 +270,7 @@ def finalize(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
         service_id=service.id,
         confidence=_clamp(state.get("confidence")),
         router_source=state.get("router_source"),
-        checklist=build_checklist(draft.get("checklist"), service),
+        checklist=build_checklist(draft.get("checklist"), service, state.get("unsupported_checklist") or ()),
         citations=build_citations(_supported_claims(state), state.get("passages") or []),
         llm_backend=deps.llm_backend,
     )
@@ -315,15 +330,19 @@ def fallback(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
 # ---------------------------------------------------------------- answer parts
 
 
-def build_checklist(raw: Any, service: Service) -> Checklist:
-    data = raw if isinstance(raw, Mapping) else {}
+def build_checklist(raw: Any, service: Service, unsupported: Sequence[str] = ()) -> Checklist:
+    """The checklist card and SMS. Fields the verifier found unsupported are replaced, never shown."""
+    data = dict(raw) if isinstance(raw, Mapping) else {}
+    for field in unsupported:
+        data[field] = [] if field == "papers" else ""
     papers = data.get("papers") if isinstance(data.get("papers"), list) else []
+    where = _text(data.get("where")) or (UNKNOWN_BN if "where" in unsupported else service.office_bn)
     return Checklist(
         service_id=service.id,
         who=to_bangla_digits(_text(data.get("who")) or UNKNOWN_BN),
         papers=tuple(to_bangla_digits(_text(p)) for p in papers if _text(p)),
         fee=to_bangla_digits(_text(data.get("fee")) or UNKNOWN_BN),
-        where=_text(data.get("where")) or service.office_bn,
+        where=where,
         decision=_text(data.get("decision")) or DECISION_NOTE,
     )
 

@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     gemini_api_keys: SecretStr = SecretStr("")
     gemini_model_main: str = ""
     gemini_model_fast: str = ""
+    gemini_model_fallback: str = ""  # tried once when the model is overloaded (503) or out of quota
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:7b"
 

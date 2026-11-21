@@ -3,7 +3,9 @@
 - `role` picks the model: MAIN -> GEMINI_MODEL_MAIN, FAST -> GEMINI_MODEL_FAST.
 - JSON answers use the SDK's JSON mode with our JSON schema (`response_json_schema`).
 - Several free keys (GEMINI_API_KEYS=key1,key2): when a key is rate-limited (429) or invalid,
-  the next key is used. Network or server errors get one retry after 1 second. Then LLMUnavailable.
+  the next key is used. Network or server errors get one retry after 1 second.
+- GEMINI_MODEL_FALLBACK (optional): when the model still fails (for example 503 "high demand", which
+  is per model), the same request is tried once more on this model. Then LLMUnavailable.
 - check() lists models with the current key (no generation, no quota used); cached for 60 s.
 Keys never appear in logs or error messages; keys are named by position (#1, #2, ...).
 """
@@ -36,6 +38,10 @@ def _default_client_factory(timeout_s: float) -> ClientFactory:
     return make
 
 
+class _Rejected(LLMUnavailable):
+    """Gemini refused the request itself (HTTP 400): another model would refuse it too."""
+
+
 def _is_key_problem(exc: Exception) -> bool:
     """Rate limit, quota or a bad key: another key may work."""
     code = getattr(exc, "code", None)
@@ -53,9 +59,11 @@ class GeminiLLM:
         client_factory: ClientFactory | None = None,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
+        fallback_model: str = "",
     ) -> None:
         self._keys = [k for k in api_keys if k]
         self._models = {ModelRole.MAIN: model_main, ModelRole.FAST: model_fast}
+        self._fallback_model = fallback_model.strip()
         self._factory = client_factory or _default_client_factory(timeout_s)
         self._clients: dict[int, Any] = {}
         self._key_index = 0
@@ -113,9 +121,21 @@ class GeminiLLM:
     def _generate(self, prompt: str, role: ModelRole, config: dict[str, Any]) -> str:
         if not self.configured:
             raise LLMUnavailable("Gemini is not configured (GEMINI_API_KEYS / GEMINI_MODEL_*)")
+        primary = self._models[role]
+        try:
+            return self._generate_with(primary, prompt, role, config)
+        except _Rejected:
+            raise  # a bad request fails the same way on another model
+        except LLMUnavailable:
+            # "High demand" (503) and quotas are per model: a second model often still answers.
+            if not self._fallback_model or self._fallback_model == primary:
+                raise
+            log.warning("Gemini %s unavailable; trying fallback model %s", primary, self._fallback_model)
+            return self._generate_with(self._fallback_model, prompt, role, config)
+
+    def _generate_with(self, model: str, prompt: str, role: ModelRole, config: dict[str, Any]) -> str:
         from google.genai import errors as genai_errors
 
-        model = self._models[role]
         keys_left = len(self._keys)  # each key gets one chance per question
         retried = False
         while True:
@@ -132,7 +152,7 @@ class GeminiLLM:
             except genai_errors.ClientError as exc:
                 self.stats.record(time.perf_counter() - started, ok=False)
                 if not _is_key_problem(exc):
-                    raise LLMUnavailable(f"Gemini rejected the request (HTTP {exc.code})") from exc
+                    raise _Rejected(f"Gemini rejected the request (HTTP {exc.code})") from exc
                 log.warning("Gemini key #%d unusable (HTTP %s); trying the next key", index + 1, exc.code)
                 keys_left -= 1
                 with self._lock:
