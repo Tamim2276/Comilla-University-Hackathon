@@ -237,6 +237,13 @@ class Container:
 
         return HandleCallEnd(self.calls)
 
+    @cached_property
+    def voice_answers(self) -> "VoiceAnswers":  # noqa: F821
+        """FR-CALL-10: turns run in the background; slow answers come through /voice/result."""
+        from app.application.use_cases.voice_jobs import VoiceAnswers
+
+        return VoiceAnswers(self.handle_voice_turn.execute, self.runner)
+
     # ------------------------------------------------------------ SMS, background and admin area
     # sms + runner (D1-A4, also passed into ask_question above); admin use cases (D2-R1).
 

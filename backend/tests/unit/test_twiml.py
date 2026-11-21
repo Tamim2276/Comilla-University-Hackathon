@@ -8,7 +8,7 @@ CFG = twiml.VoiceConfig(stt_language="bn-BD", tts_voice="Google.bn-IN-Standard-A
 XML = '<?xml version="1.0" encoding="UTF-8"?>'
 GATHER = (
     f'<Gather action="/voice/respond" actionOnEmptyResult="true" hints="{twiml.SPEECH_HINTS}" '
-    'input="speech" language="bn-BD" method="POST" speechTimeout="auto">'
+    'input="speech" language="bn-BD" method="POST" speechTimeout="2">'
 )
 
 

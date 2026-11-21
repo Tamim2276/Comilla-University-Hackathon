@@ -12,6 +12,11 @@ from app.config import Settings
 from app.domain import messages_bn
 
 RESPOND_PATH = "/voice/respond"
+RESULT_PATH = "/voice/result"
+POLL_PAUSE_S = 1  # silence between two /voice/result requests
+# Seconds of silence that end the caller's turn. "auto" cut questions at the first short pause
+# ("আমার বয়স ৬৭। ... আমি কি বয়স্ক ভাতা পাবো?" lost its second half on live calls).
+SPEECH_END_SILENCE_S = 2
 
 # Words callers are likely to say: the 8 service names (data/services.yaml) and common question words.
 # Twilio's speech recognition favours these, which helps with Bangla on phone audio (FR-CALL-02).
@@ -33,11 +38,18 @@ class VoiceConfig:
     tts_voice: str
     tts_language: str
     respond_url: str = RESPOND_PATH  # absolute in production: PUBLIC_URL + RESPOND_PATH
+    result_url: str = RESULT_PATH  # absolute in production: PUBLIC_URL + RESULT_PATH
 
     @classmethod
     def from_settings(cls, settings: Settings) -> "VoiceConfig":
-        respond_url = settings.public_url.rstrip("/") + RESPOND_PATH
-        return cls(settings.stt_language, settings.tts_voice, settings.tts_language, respond_url)
+        base = settings.public_url.rstrip("/")
+        return cls(
+            settings.stt_language,
+            settings.tts_voice,
+            settings.tts_language,
+            respond_url=base + RESPOND_PATH,
+            result_url=base + RESULT_PATH,
+        )
 
 
 def greet(cfg: VoiceConfig) -> str:
@@ -65,6 +77,26 @@ def reply(cfg: VoiceConfig, texts: tuple[str, ...], hang_up: bool) -> str:
     return say_and_hang_up(cfg, *texts) if hang_up else _say_and_listen(cfg, *texts)
 
 
+def wait_for_answer(cfg: VoiceConfig, job_id: str) -> str:
+    """FR-CALL-10: the answer is still being prepared; say WAIT_FILLER, then fetch it."""
+    response = VoiceResponse()
+    response.say(messages_bn.WAIT_FILLER, voice=cfg.tts_voice, language=cfg.tts_language)
+    response.redirect(_result_url(cfg, job_id), method="POST")
+    return str(response)
+
+
+def keep_waiting(cfg: VoiceConfig, job_id: str) -> str:
+    """FR-CALL-10: still not ready; a short pause, then ask again."""
+    response = VoiceResponse()
+    response.pause(length=POLL_PAUSE_S)
+    response.redirect(_result_url(cfg, job_id), method="POST")
+    return str(response)
+
+
+def _result_url(cfg: VoiceConfig, job_id: str) -> str:
+    return f"{cfg.result_url}?job={job_id}"
+
+
 def say_and_hang_up(cfg: VoiceConfig, *texts: str) -> str:
     response = VoiceResponse()
     for text in texts:
@@ -77,7 +109,7 @@ def _say_and_listen(cfg: VoiceConfig, *texts: str) -> str:
     gather = Gather(
         input="speech",
         language=cfg.stt_language,
-        speech_timeout="auto",
+        speech_timeout=SPEECH_END_SILENCE_S,
         action=cfg.respond_url,  # absolute, so Twilio never has to resolve a relative path
         method="POST",
         action_on_empty_result=True,  # silence also reaches /voice/respond, which counts it

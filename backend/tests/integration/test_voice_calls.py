@@ -1,5 +1,10 @@
-"""Voice webhooks end to end with the stub engine (D1-A3, D1-A5: FR-CALL-01 to 06, 09, 11). No network."""
+"""Voice webhooks end to end with the stub engine (D1-A3, D1-A5, D2-A2). No network.
 
+FR-CALL-01 to 06, 09, 10, 11.
+"""
+
+import re
+import time
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -7,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
+from app.application.use_cases.voice_jobs import VoiceAnswers
 from app.config import Settings
 from app.domain import messages_bn
 from app.domain.errors import LLMUnavailable
@@ -118,6 +124,72 @@ def test_engine_failure_speaks_error_and_keeps_listening(client: TestClient) -> 
     xml = turn(client, "বয়স্ক ভাতা")
     assert messages_bn.ERROR in xml
     assert "<Gather" in xml
+
+
+# ---------------------------------------------------------------- slow answers (FR-CALL-10)
+
+
+def slow_engine(client: TestClient, delay_s: float, inline_wait_s: float, poll_wait_s: float) -> None:
+    """An artificial delay in the engine, with the waits scaled down so the test stays fast."""
+    container = client.app.state.container
+    engine = container.answer_engine
+    real = engine.answer
+
+    def delayed(*args: object, **kwargs: object) -> object:
+        time.sleep(delay_s)
+        return real(*args, **kwargs)
+
+    engine.answer = delayed
+    container.__dict__["voice_answers"] = VoiceAnswers(
+        container.handle_voice_turn.execute,
+        container.runner,
+        inline_wait_s=inline_wait_s,
+        poll_wait_s=poll_wait_s,
+        max_polls=5,
+    )
+
+
+def follow_redirect(client: TestClient, xml: str) -> str:
+    url = re.search(r"<Redirect method=\"POST\">([^<]+)</Redirect>", xml).group(1)
+    path = url.removeprefix("https://example.ngrok-free.dev")
+    response = client.post(path, data={"CallSid": "CA1", "From": PHONE, "Direction": "inbound"})
+    assert response.status_code == 200
+    return response.text
+
+
+def test_slow_answer_says_wait_then_arrives_through_result(client: TestClient) -> None:
+    slow_engine(client, delay_s=0.5, inline_wait_s=0.05, poll_wait_s=0.2)
+    xml = turn(client, "বয়স্ক ভাতা")
+    assert messages_bn.WAIT_FILLER in xml
+    assert '<Redirect method="POST">https://example.ngrok-free.dev/voice/result?job=' in xml
+    assert "<Gather" not in xml
+
+    for _ in range(5):
+        xml = follow_redirect(client, xml)
+        if "<Redirect" not in xml:
+            break
+        assert '<Pause length="1" />' in xml
+        assert messages_bn.WAIT_FILLER not in xml  # said only once
+    assert STUB_SPEECH in xml
+    assert messages_bn.CONTINUE in xml
+    assert "<Gather" in xml
+    assert call_row(client)["turns"] == 1
+
+
+def test_answer_that_never_comes_speaks_error_and_keeps_listening(client: TestClient) -> None:
+    slow_engine(client, delay_s=0.8, inline_wait_s=0.05, poll_wait_s=0.05)
+    xml = turn(client, "বয়স্ক ভাতা")
+    for _ in range(5):
+        xml = follow_redirect(client, xml)
+    assert messages_bn.ERROR in xml
+    assert "<Gather" in xml
+    time.sleep(0.8)  # let the late answer finish before the test database closes
+
+
+def test_unknown_job_speaks_error(client: TestClient) -> None:
+    response = client.post("/voice/result?job=missing", data={"CallSid": "CA1"})
+    assert messages_bn.ERROR in response.text
+    assert "<Gather" in response.text
 
 
 # ---------------------------------------------------------------- silence and end

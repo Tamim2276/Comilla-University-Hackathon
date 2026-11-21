@@ -10,10 +10,11 @@ app/application/use_cases/speech.py.
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, Request, Response
+from fastapi import APIRouter, Depends, Form, Query, Request, Response
 
 from app.application.use_cases.handle_call_end import HandleCallEnd, RecordCallStart
-from app.application.use_cases.speech import HandleVoiceTurn
+from app.application.use_cases.speech import VoiceReply
+from app.application.use_cases.voice_jobs import Pending, VoiceAnswers
 from app.interfaces.api.deps import get_container
 from app.interfaces.voice import twiml
 from app.interfaces.voice.call_state import SilenceCounter
@@ -35,8 +36,8 @@ def get_silence_counter(request: Request) -> SilenceCounter:
     return get_container(request).silence_counter
 
 
-def get_handle_voice_turn(request: Request) -> HandleVoiceTurn:
-    return get_container(request).handle_voice_turn
+def get_voice_answers(request: Request) -> VoiceAnswers:
+    return get_container(request).voice_answers
 
 
 def get_record_call_start(request: Request) -> RecordCallStart:
@@ -58,6 +59,7 @@ def _twiml(xml: str) -> Response:
 
 Config = Annotated[twiml.VoiceConfig, Depends(get_voice_config)]
 Silences = Annotated[SilenceCounter, Depends(get_silence_counter)]
+Answers = Annotated[VoiceAnswers, Depends(get_voice_answers)]
 CallSid = Annotated[str, Form(alias="CallSid")]
 From = Annotated[str, Form(alias="From")]
 To = Annotated[str, Form(alias="To")]
@@ -104,14 +106,14 @@ def start(
 def respond(
     cfg: Config,
     silences: Silences,
-    handle_turn: Annotated[HandleVoiceTurn, Depends(get_handle_voice_turn)],
+    answers: Answers,
     call_sid: CallSid = "",
     speech: Annotated[str, Form(alias="SpeechResult")] = "",
     from_: From = "",
     to: To = "",
     direction: Direction = "inbound",
 ) -> Response:
-    """FR-CALL-02 to 06, 09: one caller turn."""
+    """FR-CALL-02 to 06, 09, 10: one caller turn."""
     text = speech.strip()
     if not text:
         count = silences.silent(call_sid)
@@ -123,10 +125,31 @@ def respond(
 
     silences.heard(call_sid)
     log.info("voice heard call_sid=%s text=%s", call_sid, text)
-    result = handle_turn.execute(call_sid, citizen_number(from_, to, direction), text, direction)
-    if result.hang_up:
+    outcome = answers.start(call_sid, citizen_number(from_, to, direction), text, direction)
+    if isinstance(outcome, Pending):
+        return _twiml(twiml.wait_for_answer(cfg, outcome.job_id))
+    return _speak(cfg, silences, call_sid, outcome)
+
+
+@router.post("/result", response_class=Response)
+def result(
+    cfg: Config,
+    silences: Silences,
+    answers: Answers,
+    job: Annotated[str, Query()] = "",
+    call_sid: CallSid = "",
+) -> Response:
+    """FR-CALL-10: the answer of a slow turn, once it is ready (Twilio follows our <Redirect>)."""
+    outcome = answers.result(job)
+    if isinstance(outcome, Pending):
+        return _twiml(twiml.keep_waiting(cfg, outcome.job_id))
+    return _speak(cfg, silences, call_sid, outcome)
+
+
+def _speak(cfg: twiml.VoiceConfig, silences: SilenceCounter, call_sid: str, reply: VoiceReply) -> Response:
+    if reply.hang_up:
         silences.forget(call_sid)
-    return _twiml(twiml.reply(cfg, result.say, result.hang_up))
+    return _twiml(twiml.reply(cfg, reply.say, reply.hang_up))
 
 
 @router.post("/status", status_code=204, response_class=Response)
