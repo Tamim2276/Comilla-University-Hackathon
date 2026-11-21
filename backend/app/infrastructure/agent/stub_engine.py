@@ -29,7 +29,7 @@ class StubAnswerEngine:
     def answer(self, question: str, history: Sequence[Message], channel: Channel) -> Answer:
         speech = "পুরুষদের ৬৫ বছর হলে আবেদন করা যায়, আর আবেদন সম্পূর্ণ বিনামূল্যে। জাতীয় পরিচয়পত্র লাগবে।"
         display = (
-            "**বয়স্ক ভাতা**\n"
+            "**বয়স্ক ভাতা** (নমুনা উত্তর, পরীক্ষার জন্য: AGENT_ENGINE=stub)\n"
             "- কারা: পুরুষ ৬৫+, নারী ৬২+, স্থায়ী বাসিন্দা\n"
             "- লাগবে: জাতীয় পরিচয়পত্র বা জন্ম নিবন্ধন\n"
             "- ফি: বিনামূল্যে\n"

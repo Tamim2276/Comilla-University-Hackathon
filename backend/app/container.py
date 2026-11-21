@@ -14,10 +14,12 @@ from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.agent.steps import AgentDeps
+from app.application.ports.background import BackgroundRunner
 from app.application.ports.classifier import ServiceClassifier
 from app.application.ports.clustering import Clusterer
 from app.application.ports.engine import AnswerEngine
 from app.application.ports.llm import LLM
+from app.application.ports.messaging import SmsSender
 from app.application.ports.repositories import (
     AnswerCache,
     CallRepo,
@@ -34,6 +36,7 @@ from app.config import Settings
 from app.domain.entities import Service
 from app.infrastructure.agent.langgraph_engine import LangGraphAnswerEngine
 from app.infrastructure.agent.stub_engine import StubAnswerEngine
+from app.infrastructure.background.thread_runner import ThreadPoolRunner
 from app.infrastructure.cache.answer_cache import SqlAnswerCache
 from app.infrastructure.catalog.yaml_services import load_services
 from app.infrastructure.db.repositories import (
@@ -53,6 +56,8 @@ from app.infrastructure.ml.llm_classifier import LLMClassifier
 from app.infrastructure.ml.tfidf_classifier import TfidfClassifier
 from app.infrastructure.retrieval.chroma_retriever import ChromaRetriever
 from app.infrastructure.retrieval.e5_embedder import E5Embedder
+from app.infrastructure.sms.console_sms import ConsoleSms
+from app.infrastructure.sms.textbee_sms import TextbeeSms
 
 log = logging.getLogger(__name__)
 
@@ -129,7 +134,12 @@ class Container:
     @cached_property
     def gemini(self) -> GeminiLLM:
         s = self.settings
-        return GeminiLLM(s.gemini_key_list, s.gemini_model_main, s.gemini_model_fast)
+        return GeminiLLM(
+            s.gemini_key_list,
+            s.gemini_model_main,
+            s.gemini_model_fast,
+            fallback_model=s.gemini_model_fallback,
+        )
 
     @cached_property
     def ollama(self) -> OllamaLLM:
@@ -178,6 +188,8 @@ class Container:
             question_logs=self.question_logs,
             services=self.services,
             phone_hash_salt=self.settings.phone_hash_salt.get_secret_value(),
+            sms=self.sms,
+            runner=self.runner,
         )
 
     @cached_property
@@ -204,8 +216,20 @@ class Container:
         return SilenceCounter()
 
     # ------------------------------------------------------------ SMS, background and admin area
-    # Planned here: sms (console | textbee), runner (ThreadPoolRunner), admin use cases
-    # (steps D1-A4, D2-R1). D1-A4 also passes sms + runner into ask_question above.
+    # sms + runner (D1-A4, also passed into ask_question above); admin use cases come in D2-R1.
+
+    @cached_property
+    def sms(self) -> SmsSender:
+        """SMS_BACKEND: console (prints the SMS, the default) | textbee (real SMS, FR-SMS-03)."""
+        s = self.settings
+        if s.sms_backend == "textbee":
+            return TextbeeSms(s.textbee_api_key.get_secret_value(), s.textbee_device_id)
+        return ConsoleSms()
+
+    @cached_property
+    def runner(self) -> BackgroundRunner:
+        """Background work: SMS (D1-A4), call-back (D2-A1) and async voice answers (D2-A2)."""
+        return ThreadPoolRunner(max_workers=4)
 
     # ------------------------------------------------------------ AI area
     # Planned here: classifier (tfidf | banglabert | llm), the LangGraph engine (replaces answer_engine

@@ -1,23 +1,35 @@
-// Placeholder page for the scaffold step. Real pages come in D1-R3.
+// Routes (SRS 3.3): / start, /chat chat, /history past checklists. /admin comes in D2-R1.
+
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { useSession } from './application/useSession'
+import { ChatPage } from './presentation/pages/ChatPage'
+import { HistoryPage } from './presentation/pages/HistoryPage'
+import { StartPage } from './presentation/pages/StartPage'
+
 function App() {
+  const session = useSession()
+
   return (
-    <main className="min-h-screen bg-bd-green flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-lg p-8 text-center max-w-sm w-full">
-        {/* The flag in miniature: a red disc on green */}
-        <div className="mx-auto mb-4 flex h-20 w-28 items-center justify-center rounded-md bg-bd-green">
-          <div className="h-11 w-11 rounded-full bg-bd-red" />
-        </div>
-        <h1 className="text-4xl font-bold text-bd-green">এক কল</h1>
-        <p className="mt-2 text-gray-600">Ek Call</p>
-        <button
-          type="button"
-          className="mt-6 min-h-12 w-full rounded-xl bg-bd-red px-6 text-lg font-bold text-white hover:bg-bd-red-dark"
-        >
-          শুরু করুন
-        </button>
-        <p className="mt-4 text-sm text-bd-red-dark">Theme check: Bangladesh flag colours.</p>
-      </div>
-    </main>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<StartPage session={session} />} />
+        <Route
+          path="/chat"
+          element={
+            session.phone ? (
+              <ChatPage session={session} phone={session.phone} />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route
+          path="/history"
+          element={session.phone ? <HistoryPage phone={session.phone} /> : <Navigate to="/" replace />}
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
 
