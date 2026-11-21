@@ -6,6 +6,19 @@ Nothing secret belongs in this file. Keys and Twilio values are shared privately
 
 ---
 
+## 8. Two more official documents in the search index, 21 Nov
+
+**What changed**
+- The birth registration rules (2018 gazette) and the 2004 Act now have real source links, so they are in the search index: birth registration went from 2 to 4 documents (49 searchable passages). Search finds the right service for 95.8 % of test questions now (was 94.8 %), and birth registration for 83 % (was 75 %). One more document (the FAQ) waits for its link.
+
+**You need to**
+1. Pull `main`, merge it into your branch, then in `backend/` run `python -m scripts.ingest` (about a minute) to rebuild your local search index. Without this your answers still use the old, smaller index.
+
+**Good to know**
+- Answers about birth registration may now cite the rules or the Act (a new source link in the checklist card and SMS).
+
+---
+
 ## 7. Evaluation results, and 15 minutes of checking for you (D2-T3), 21 Nov
 
 **What changed**
