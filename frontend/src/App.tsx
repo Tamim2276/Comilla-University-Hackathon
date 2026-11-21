@@ -1,8 +1,9 @@
-// Routes (SRS 3.3): / start, /chat chat. /history and /admin come in D1-R5 and D2-R1.
+// Routes (SRS 3.3): / start, /chat chat, /history past checklists. /admin comes in D2-R1.
 
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { useSession } from './application/useSession'
 import { ChatPage } from './presentation/pages/ChatPage'
+import { HistoryPage } from './presentation/pages/HistoryPage'
 import { StartPage } from './presentation/pages/StartPage'
 
 function App() {
@@ -21,6 +22,10 @@ function App() {
               <Navigate to="/" replace />
             )
           }
+        />
+        <Route
+          path="/history"
+          element={session.phone ? <HistoryPage phone={session.phone} /> : <Navigate to="/" replace />}
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
