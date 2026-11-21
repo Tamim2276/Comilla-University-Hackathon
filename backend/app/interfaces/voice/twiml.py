@@ -21,10 +21,12 @@ class VoiceConfig:
     stt_language: str
     tts_voice: str
     tts_language: str
+    respond_url: str = RESPOND_PATH  # absolute in production: PUBLIC_URL + RESPOND_PATH
 
     @classmethod
     def from_settings(cls, settings: Settings) -> "VoiceConfig":
-        return cls(settings.stt_language, settings.tts_voice, settings.tts_language)
+        respond_url = settings.public_url.rstrip("/") + RESPOND_PATH
+        return cls(settings.stt_language, settings.tts_voice, settings.tts_language, respond_url)
 
 
 def greet(cfg: VoiceConfig) -> str:
@@ -55,7 +57,7 @@ def _say_and_listen(cfg: VoiceConfig, *texts: str) -> str:
         input="speech",
         language=cfg.stt_language,
         speech_timeout="auto",
-        action=RESPOND_PATH,
+        action=cfg.respond_url,  # absolute, so Twilio never has to resolve a relative path
         method="POST",
         action_on_empty_result=True,  # silence also reaches /voice/respond, which counts it
     )

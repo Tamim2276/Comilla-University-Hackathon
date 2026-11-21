@@ -40,5 +40,8 @@ def test_answer_text_is_xml_escaped() -> None:
 def test_config_comes_from_settings() -> None:
     from app.config import Settings
 
-    settings = Settings(_env_file=None, stt_language="bn-IN")
-    assert twiml.VoiceConfig.from_settings(settings).stt_language == "bn-IN"
+    settings = Settings(_env_file=None, stt_language="bn-IN", public_url="https://x.ngrok-free.dev/")
+    cfg = twiml.VoiceConfig.from_settings(settings)
+    assert cfg.stt_language == "bn-IN"
+    assert cfg.respond_url == "https://x.ngrok-free.dev/voice/respond"
+    assert 'action="https://x.ngrok-free.dev/voice/respond"' in twiml.greet(cfg)

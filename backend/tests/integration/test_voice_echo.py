@@ -39,7 +39,7 @@ def test_call_start_greets_and_listens(client: TestClient, path: str) -> None:
     response = client.post(path, data={"CallSid": "CA1"})
     assert response.status_code == 200
     assert messages_bn.GREETING in response.text
-    assert '<Gather action="/voice/respond"' in response.text
+    assert '<Gather action="http://localhost:8000/voice/respond"' in response.text
     assert 'language="bn-BD"' in response.text
 
 
