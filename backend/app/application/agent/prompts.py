@@ -102,7 +102,10 @@ Citizen's question: {question}
 
 Rules:
 1. Answer only from the passages above. If they do not answer the question, return
-   "no_answer": true and leave the other text fields empty.
+   "no_answer": true and leave the other text fields empty. A passage on a related topic is
+   NOT an answer: if the citizen asks how to do something (for example how to file a court
+   case or settle a boundary dispute) and the passages only describe a different procedure
+   (for example how to check whether a case exists), return "no_answer": true.
 2. Write everyday Bangla in short sentences for an elderly listener. In speech_text avoid
    English words unless there is no Bangla word. Write all numbers in Bangla digits (৬৫, not 65).
    Never assume facts the citizen did not say (gender, income, residence); state the rule instead.

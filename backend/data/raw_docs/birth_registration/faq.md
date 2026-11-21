@@ -1,12 +1,11 @@
 ---
 title: জন্ম ও মৃত্যু নিবন্ধন বিষয়ক প্রায়শই জিজ্ঞাসিত প্রশ্ন (FAQ)
-source_url: https://orgbdr.gov.bd/...
+source_url: https://orgbdr.gov.bd/pages/static-pages/6922e065933eb65569e26d6e
 office: ইউনিয়ন পরিষদ/পৌরসভা/সিটি কর্পোরেশন/ক্যান্টনমেন্ট বোর্ডের জন্ম ও মৃত্যু নিবন্ধকের কার্যালয়; বিদেশে বাংলাদেশ দূতাবাস
 collected_on: 2026-11-20
 ---
 <!--
-TODO (blocks the checker on purpose): source_url = the orgbdr.gov.bd page
-"আপনার জিজ্ঞাসা / প্রায়শই জিজ্ঞাসিত প্রশ্ন FAQ" (copy the address bar).
+Source: the orgbdr.gov.bd page "আপনার জিজ্ঞাসা / প্রায়শই জিজ্ঞাসিত প্রশ্ন FAQ".
 
 Official text copied by hand from that page on 2026-11-20. Only the "##" headings were added
 (each heading is the question as written on the page). Spelling is as on the page; only missing or

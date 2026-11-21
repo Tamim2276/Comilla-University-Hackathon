@@ -1,15 +1,14 @@
 ---
 title: জন্ম ও মৃত্যু নিবন্ধন বিধিমালা, ২০১৮
-source_url: https://objectstorage.ap-dcc-gazipur-1.oraclecloud15.com/...
+source_url: https://objectstorage.ap-dcc-gazipur-1.oraclecloud15.com/n/axvjbnqprylg/b/V2Ministry/o/office-orgbdr/2024/12/3a0794717d964d90a71794fb8c81857d.pdf
 office: ইউনিয়ন পরিষদ/পৌরসভা/সিটি কর্পোরেশন/ক্যান্টনমেন্ট বোর্ডের জন্ম ও মৃত্যু নিবন্ধকের কার্যালয়; বিদেশে বাংলাদেশ দূতাবাস
 collected_on: 2026-11-20
 ---
 <!--
-TODO (blocks the checker on purpose): source_url. This is the 2018 rules gazette (44 pages,
-Bangladesh Gazette 8 March 2018, এস,আর,ও নং ৭৯-আইন/২০১৮). It is one of these two orgbdr links:
-  .../office-orgbdr/2024/12/3a0794717d964d90a71794fb8c81857d.pdf
-  .../office-orgbdr/2026/3/196e5538-3acb-4149-b925-f8e6d7b32390.pdf
-(the other one is the 6-page "জন্ম ও মৃত্যু নিবন্ধন নির্দেশিকা ২০২১").
+Source: the 2018 rules gazette on orgbdr.gov.bd (44 pages, Bangladesh Gazette 8 March 2018,
+এস,আর,ও নং ৭৯-আইন/২০১৮). The first page of the PDF at source_url was checked on 2026-11-21.
+(The other orgbdr PDF, .../2026/3/196e5538-3acb-4149-b925-f8e6d7b32390.pdf, is the 6-page scanned
+"জন্ম ও মৃত্যু নিবন্ধন নির্দেশিকা ২০২১", a different document that is not used here.)
 
 Typed by hand from the gazette page images (the PDF text layer is Bijoy-encoded), 2026-11-20.
 Only headings were added. Kept: the rules a citizen needs for birth registration (definitions,

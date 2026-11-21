@@ -6,11 +6,144 @@ Nothing secret belongs in this file. Keys and Twilio values are shared privately
 
 ---
 
-## 7. Evaluation results, and 15 minutes of checking for you (D2-T3), 21 Nov
+## Start here: everything to do once, in order (Ragib and Ariful)
+
+Do these steps first. The numbered entries below (newest first, 11 down to 1) explain what changed and why; read them from the top until you reach one you already read.
+
+**1. Get the latest code**
+- `git checkout main`, then `git pull origin main`.
+- Already have a branch? `git checkout <your-branch>`, then `git merge main`. New step? `git checkout -b <your-name>/<step>-<short-name>` (Section 0.3 of `docs/BUILD_PLAN.md`). Run git commands from the project root.
+
+**2. Set up your laptop** (skip what is already done): `docs/SETUP.md` sections 1 to 6 (tools, venv, requirements). Troubleshooting: section 10.
+
+**3. Fill your `backend/.env`** (write each value right after the `=`, no comment on the same line)
+- From Tamim, privately: `GEMINI_API_KEYS`, `GEMINI_MODEL_MAIN=gemini-3.5-flash-lite`, `GEMINI_MODEL_FAST=gemini-3.5-flash-lite`. Also set `LLM_BACKEND=gemini`.
+- Add these: `PRELOAD_MODELS=true`, `ROUTER_BACKEND=banglabert` (without the model folder it falls back to TF-IDF by itself), `AGENT_ENGINE=langgraph`.
+- No keys yet, or the key limit is reached? Use `AGENT_ENGINE=stub` (a fixed sample answer) and keep building. Nothing else changes for you.
+- Never commit `.env`, never paste keys into a chat that keeps history.
+
+**4. Build the search index and the router** (`backend/` folder, venv active, PowerShell: first `$env:PYTHONIOENCODING = "utf-8"`)
+- `python -m scripts.train_baseline` (seconds; makes the TF-IDF router).
+- `python -m scripts.ingest` (about a minute; builds the search index from the official documents and clears old cached answers). **Run it again after every pull that changes `backend/data/raw_docs/`.**
+
+**5. Check that it works**
+- `python -m scripts.ask "আমার বয়স ৬৭, বয়স্ক ভাতা পাবো?"` prints a Bangla answer with sources (first run takes longer while models load).
+- `ruff check .` and `pytest -q` are green.
+- `uvicorn app.main:app --reload --port 8000`, then open `http://localhost:8000/health`: every part says ok (the router says banglabert or tfidf). Test Bangla in Swagger (`http://localhost:8000/docs`), not with curl.
+
+**6. Your own steps** (Section 0.1 of `docs/BUILD_PLAN.md`, Owner column, in that order)
+- **Ragib:** start with D1-A3 (Twilio echo mode). Twilio values come from Tamim privately. Entry 3 explains the `follow_up` answer status, which your call flow must handle ("হ্যাঁ" after a follow-up keeps the same service). **Read entry 12 before you touch Twilio:** the number is a shared trial number (it is not under "Active numbers", that is normal), the webhook is set under Try out Voice > Receive a call, and only verified phones can call in.
+- **Ariful:** start with D1-R3 (app pages and chat page). Entry 6 has the JSON of the two cluster routes for your cluster view. Entries 9 and 10 say checklists can now be longer (several amounts, longer paper lists): wrap them on the card and keep the SMS within 300 characters.
+
+**7. When you finish a step**
+- Run the step's Done-check, `ruff check .`, `pytest -q` (and `npm run build` if you touched the app).
+- Name the step in your pull request title, change only files you own (Section 0.4), never edit `main.py`, `schemas.py`, `deps.py` or `docs/SRS.md`.
+- Tell Tamim, so he can update the Status column and add an entry here.
+
+**What Tamim gives you privately (not in this file)**
+- Gemini keys and model names; the Twilio values and your verified number (Ragib); access to the repo (collaborator invitation).
+- The BanglaBERT router folder (about 450 MB, for the demo laptop only) when it is time.
+
+**Your first task together (about 15 minutes each)**
+- Mark the answer check (entry 7): Ragib rows 1 to 16, Ariful rows 17 to 32 of `docs/results/answer_check.csv`. Do it after step 5 above, so you have the same documents. Send your marked file to Tamim (or commit it on your branch).
+
+**Later**
+- Later, deployment: Ariful puts the app on Vercel (set `VITE_API_URL` to the backend address Tamim gives you); the backend runs on the demo laptop with ngrok. Details when the time comes.
+
+---
+
+## 12. Twilio: the trial number is shared, how to set its webhook (Ragib), 21 Nov
 
 **What changed**
-- `python -m scripts.eval_rag` measured the whole system against SRS 11 (results in `docs/results/rag_eval.md`): search finds the right service in the top 5 for 94.8 % of test questions (target 90 %), 37 of 37 off-topic questions got the safe FALLBACK answer (target 95 %), and phone answers take 3.4 s median (target 5 s).
-- The last SRS target, answer correctness (90 %), needs people: `docs/results/answer_check.csv` holds 32 real answers to check.
+- Nothing in the code. The Twilio number in `.env` is a **shared trial number**, so it is not listed under Phone Numbers > Active numbers and the API does not list it. That is why a lookup says "number not found" even though the account ID and token match and calls from the number work.
+
+**You need to** (Ragib, when your voice server is running)
+1. Start `ngrok http 8000` and set `PUBLIC_URL` in `backend/.env` to its address.
+2. Twilio Console (Tamim's account, so Tamim does this or shares his screen): **Try out Voice > Receive a call > Custom > Webhook URL** `https://<your-ngrok-url>/voice/incoming`, POST, Save. Only one webhook exists at a time, so it points to the laptop that is testing.
+3. Phones that call in must be **verified recipients** in the console (about 5 allowed). Ask Tamim to add yours and Ariful's.
+4. Expect a Twilio trial message first, and calls last at most 10 minutes.
+
+**Good to know**
+- "Call me" (outbound) uses the same number as the From number and the values already in `.env`; it needs the recipient to be a verified number too.
+- Troubleshooting rows for this are in `docs/BUILD_PLAN.md` Section 9.
+- Check your setup quickly: the account ID and token are fine if the console works with them; "number not found" in a lookup is expected for a trial number, so do not spend time on it. If a call fails, look at Twilio Console > Monitor > Logs > Errors and match the code with the Section 9 table.
+
+**Limits of the trial number (know them before the demo)**
+- Only **verified phones** can call the number or receive "Call me": Tamim's, yours, Ariful's (about 5 allowed). A judge's own phone will not get through unless it is added or the account is upgraded.
+- A Twilio trial message plays first, and a call lasts at most 10 minutes.
+- The number has **one** incoming webhook, so it reaches one laptop at a time. Say in the group chat who is testing, and update the webhook and `PUBLIC_URL` when the voice laptop changes (the demo laptop at the end).
+
+**Backup plan if calls do not work (decided, no extra work)**
+1. Spend at most 1 hour on Twilio problems on Day 2 morning (Section 9 of the plan).
+2. Demo the voice through the app: the browser microphone (Bangla speech-to-text) and the spoken answer (text-to-speech). It is the same agent and the same answers; only the phone line is missing. Ragib's D1-R7 (mic) and D2-R2 (answer audio) are the steps that make this work, so they matter for the demo.
+3. Tamim makes the live phone call himself from a verified phone, and the "Call me" button in the app rings a verified phone.
+4. Record the 3-minute backup video of the phone call (S1) whenever it works (D2-ALL-2).
+
+---
+
+## 11. Trade licence: Dhaka South added, 21 Nov
+
+**What changed**
+- Trade licence now has two city corporations: Dhaka North (already there) and Dhaka South (new: how to apply, the papers, 3 days or 7 days, renewal at a Sonali Bank branch in 1 day, the online link). Answers say which corporation a rule belongs to; neither page gives a licence fee amount, so the agent says the fee depends on the type of business and does not invent a number.
+
+**You need to**
+1. Pull `main`, merge it into your branch, then in `backend/` run `python -m scripts.ingest`.
+
+**Good to know**
+- Trade licence checklists may show the fee as "depends on the type of business" or the standard unknown text. That is the honest answer with these documents.
+
+---
+
+## 10. Land mutation: required papers, appeals and the Ministry circular in the search index, 21 Nov
+
+**What changed**
+- Land mutation (e-Namjari) went from 1 to 3 official documents (25 searchable passages, was 3): the Ministry of Land's FAQ page (the list of required papers, fees, the 28-day target, hearing, tracking, appeals and review deadlines) and the ministry circular of 4 December 2022 on how applications are decided.
+- Questions such as "which papers do I need", "where do I appeal if my application is rejected" and "does an heir certificate expire" now get answers with the official source. The circular says an heir certificate has no expiry, which replaces older guides.
+
+**You need to**
+1. Pull `main`, merge it into your branch, then in `backend/` run `python -m scripts.ingest` (about a minute). It also clears your old cached answers.
+
+**Good to know**
+- Nothing changes in the API. Checklist `papers` for land mutation is now a real list, so the checklist card and the SMS will show more lines (the SMS formatter already shortens long lines).
+
+---
+
+## 9. NID: official fee table and form instructions in the search index, 21 Nov
+
+**What changed**
+- NID correction went from 5 to 12 documents (35 searchable passages, was 17), all from the Election Commission (ecs.gov.bd): the official fee table, the instructions of the correction form (which papers each kind of correction needs), the lost-card form with its instructions, and the forms for printing mistakes, moving the voter area and correcting or removing voter-list entries.
+- Questions about NID fees now get the real amounts with VAT, for example the first name correction costs fee 200 Taka plus 30 Taka VAT, and the source link in the answer is the Election Commission's fee table. Before, the answer only said that a fee exists.
+- Questions about papers (date of birth, name, parents' names, address, blood group) now cite the instructions of the correction form.
+
+**You need to**
+1. Pull `main`, merge it into your branch, then in `backend/` run `python -m scripts.ingest` (about a minute). It also clears your old cached answers.
+
+**Good to know**
+- Ariful: an NID answer's checklist `fee` can now be a longer text with several amounts (1st, 2nd, later time). Make sure the checklist card and the SMS text wrap it properly (the SMS formatter already shortens long lines).
+
+---
+
+## 8. Birth registration documents complete, search index rebuilt, 21 Nov
+
+**What changed**
+- The birth registration rules (2018 gazette), the 2004 Act and the FAQ now have real source links, so all 5 birth registration documents are in the search index (58 searchable passages, was 2 documents). Search finds the right service for 97.9 % of test questions now (was 94.8 %), and for birth registration 100 % (was 75 %). A question that used to get the "no confident information" reply (birth number not 17 digits) now gets a real answer with the FAQ as its source.
+- `python -m scripts.ingest` now also clears the answer cache, so answers made from old documents are never served after the documents change.
+
+**You need to**
+1. Pull `main`, merge it into your branch, then in `backend/` run `python -m scripts.ingest` (about a minute) to rebuild your local search index and clear your old cached answers. Without this your answers still use the old, smaller index.
+
+**Good to know**
+- Answers about birth registration may now cite the rules or the Act (a new source link in the checklist card and SMS).
+
+---
+
+## 7. Evaluation results, and 15 minutes of checking for you (D2-T3), 21 Nov
+
+**READY: please mark your rows now.** `docs/results/answer_check.csv` was regenerated at the end of 21 Nov with the final documents (it replaces the first version; if you opened an older copy, discard it).
+
+**What changed**
+- `python -m scripts.eval_rag` measured the whole system against SRS 11 (results in `docs/results/rag_eval.md`, final run): search finds the right service in the top 5 for 96.9 % of test questions (target 90 %), 37 of 37 off-topic questions got the safe FALLBACK answer (target 95 %), and phone answers take about 3.6 to 5.1 s median depending on how busy Gemini is (target 5 s).
+- The last SRS target, answer correctness (90 %), needs people: `docs/results/answer_check.csv` holds 32 real answers to check (29 answered, 3 safe fallbacks).
 
 **You need to** (Ragib takes rows 1 to 16, Ariful rows 17 to 32)
 1. Open `docs/results/answer_check.csv` in Excel or Google Sheets (it is UTF-8, Bangla shows correctly).
