@@ -196,6 +196,13 @@ class Container:
     # Planned here: call_placer (Twilio), tts (gTTS), start_callback, handle_call_end, synthesize_speech
     # (steps D1-A3, D1-A5, D2-A1, D2-R2, D2-A2).
 
+    @cached_property
+    def silence_counter(self) -> "SilenceCounter":  # noqa: F821 (imported below to keep this area self-contained)
+        """FR-CALL-04: empty speech results in a row, per CallSid (one per app)."""
+        from app.interfaces.voice.call_state import SilenceCounter
+
+        return SilenceCounter()
+
     # ------------------------------------------------------------ SMS, background and admin area
     # Planned here: sms (console | textbee), runner (ThreadPoolRunner), admin use cases
     # (steps D1-A4, D2-R1). D1-A4 also passes sms + runner into ask_question above.
