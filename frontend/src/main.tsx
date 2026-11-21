@@ -10,7 +10,7 @@ import { createLocalSessionStore } from './infrastructure/storage'
 
 // Composition root of the app: the only place that builds the real adapters.
 const ports: Ports = {
-  api: createApiClient(config.apiUrl, config.requestTimeoutMs, config.adminToken),
+  api: createApiClient(config.apiUrl, config.requestTimeoutMs, config.adminToken, config.rebuildTimeoutMs),
   session: createLocalSessionStore(),
 }
 

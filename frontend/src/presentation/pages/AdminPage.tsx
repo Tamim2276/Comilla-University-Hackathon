@@ -1,9 +1,10 @@
 // Admin dashboard (FR-ADM-01, 02, 06; SRS 3.4; scenario S6). Refreshes itself every 10 s.
-// The cluster view (D2-R5) is added below the chart in a later step.
+// Order as in SRS 3.4: KPIs, per service, per channel, clusters (D2-R5), unanswered, recent activity.
 
 import { useAdmin } from '../../application/useAdmin'
 import { UI } from '../../domain/messages'
 import { AppHeader } from '../components/AppHeader'
+import { ClusterList } from '../components/ClusterList'
 import { QuestionList } from '../components/QuestionList'
 import { ServiceBarChart } from '../components/ServiceBarChart'
 import { StatCard } from '../components/StatCard'
@@ -82,6 +83,8 @@ export function AdminPage() {
                 )}
               </section>
             </div>
+
+            <ClusterList />
 
             <div className="grid gap-4 lg:grid-cols-2">
               <QuestionList title={UI.unansweredTitle} rows={unanswered} empty={UI.noUnanswered} />
