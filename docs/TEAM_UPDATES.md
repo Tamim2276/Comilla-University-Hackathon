@@ -6,6 +6,20 @@ Nothing secret belongs in this file. Keys and Twilio values are shared privately
 
 ---
 
+## 10. Land mutation: required papers, appeals and the Ministry circular in the search index, 21 Nov
+
+**What changed**
+- Land mutation (e-Namjari) went from 1 to 3 official documents (25 searchable passages, was 3): the Ministry of Land's FAQ page (the list of required papers, fees, the 28-day target, hearing, tracking, appeals and review deadlines) and the ministry circular of 4 December 2022 on how applications are decided.
+- Questions such as "which papers do I need", "where do I appeal if my application is rejected" and "does an heir certificate expire" now get answers with the official source. The circular says an heir certificate has no expiry, which replaces older guides.
+
+**You need to**
+1. Pull `main`, merge it into your branch, then in `backend/` run `python -m scripts.ingest` (about a minute). It also clears your old cached answers.
+
+**Good to know**
+- Nothing changes in the API. Checklist `papers` for land mutation is now a real list, so the checklist card and the SMS will show more lines (the SMS formatter already shortens long lines).
+
+---
+
 ## 9. NID: official fee table and form instructions in the search index, 21 Nov
 
 **What changed**
