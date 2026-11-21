@@ -24,7 +24,7 @@ export function ExampleChips({
   return (
     <div>
       {title && <p className="mb-2 text-base font-bold text-bd-green">{title}</p>}
-      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible [&::-webkit-scrollbar]:hidden">
         {EXAMPLES.map((e) => (
           <button
             key={e.label}

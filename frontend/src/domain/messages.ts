@@ -29,4 +29,24 @@ export const UI = {
   fallbackLabel: 'নিশ্চিত তথ্য পাওয়া যায়নি',
   changeNumber: 'নম্বর বদলান',
   you: 'আপনি',
+  // checklist card and sources (D1-R5)
+  checklistTitle: 'যা জানা দরকার',
+  checklistWho: 'কারা পাবেন',
+  checklistPapers: 'কী কী লাগবে',
+  checklistFee: 'ফি',
+  checklistWhere: 'কোথায় আবেদন',
+  checklistDecision: 'সিদ্ধান্ত',
+  sourcesTitle: 'সূত্র (সরকারি কাগজ)',
+  // history (D1-R5)
+  history: 'আগের উত্তর',
+  historyEn: 'History',
+  historyTitle: 'আপনার আগের উত্তরগুলো',
+  historyEmpty: 'এই নম্বরে এখনো কোনো উত্তর নেই। প্রশ্ন করলে উত্তরগুলো এখানে জমা থাকবে।',
+  historyLoading: 'আগের উত্তর আনা হচ্ছে…',
+  historyRetry: 'আবার চেষ্টা করুন',
+  smsSentBadge: 'এসএমএস পাঠানো হয়েছে',
+  backToChat: 'প্রশ্ন করুন',
 } as const
+
+/** Text the agent uses for a checklist field the official documents do not state. */
+export const UNKNOWN_FIELD = 'তথ্য পাওয়া যায়নি'
