@@ -13,6 +13,17 @@ from app.domain import messages_bn
 
 RESPOND_PATH = "/voice/respond"
 
+# Words callers are likely to say: the 8 service names (data/services.yaml) and common question words.
+# Twilio's speech recognition favours these, which helps with Bangla on phone audio (FR-CALL-02).
+SPEECH_HINTS = ",".join(
+    (
+        "বয়স্ক ভাতা", "বিধবা ভাতা", "প্রতিবন্ধী ভাতা", "জন্ম নিবন্ধন", "এনআইডি সংশোধন",
+        "পাসপোর্ট", "ই-পাসপোর্ট", "নামজারি", "ই-নামজারি", "ট্রেড লাইসেন্স",
+        "বয়স", "ভাতা", "আবেদন", "কাগজ", "কী কী লাগবে", "ফি", "কোথায়", "কত টাকা", "পাবো",
+        "জাতীয় পরিচয়পত্র", "এনআইডি", "জমি", "লাইসেন্স", "না", "ধন্যবাদ",
+    )
+)
+
 
 @dataclass(frozen=True)
 class VoiceConfig:
@@ -46,8 +57,18 @@ def reprompt(cfg: VoiceConfig) -> str:
 
 def goodbye(cfg: VoiceConfig) -> str:
     """Say GOODBYE and hang up (second silence, goodbye intent, turn limit)."""
+    return say_and_hang_up(cfg, messages_bn.GOODBYE)
+
+
+def reply(cfg: VoiceConfig, texts: tuple[str, ...], hang_up: bool) -> str:
+    """Any turn result: say the texts, then listen again or hang up."""
+    return say_and_hang_up(cfg, *texts) if hang_up else _say_and_listen(cfg, *texts)
+
+
+def say_and_hang_up(cfg: VoiceConfig, *texts: str) -> str:
     response = VoiceResponse()
-    response.say(messages_bn.GOODBYE, voice=cfg.tts_voice, language=cfg.tts_language)
+    for text in texts:
+        response.say(text, voice=cfg.tts_voice, language=cfg.tts_language)
     response.hangup()
     return str(response)
 
@@ -60,6 +81,7 @@ def _say_and_listen(cfg: VoiceConfig, *texts: str) -> str:
         action=cfg.respond_url,  # absolute, so Twilio never has to resolve a relative path
         method="POST",
         action_on_empty_result=True,  # silence also reaches /voice/respond, which counts it
+        hints=SPEECH_HINTS,
     )
     for text in texts:
         gather.say(text, voice=cfg.tts_voice, language=cfg.tts_language)
