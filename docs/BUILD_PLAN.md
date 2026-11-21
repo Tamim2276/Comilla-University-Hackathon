@@ -59,7 +59,7 @@ Each person follows their own rows top to bottom. A step only needs the steps ab
 | 28 | D2-T2 | K-Means clusters + cluster APIs | Tamim | 2 | done |
 | 29 | D2-R5 | Cluster view in the dashboard | Ariful | 1 | |
 | 30 | D2-R4 | App polish, 360 px check, PWA | Ariful | 1 | |
-| 31 | D2-T3 | RAG evaluation + answer check | Tamim | 2 | |
+| 31 | D2-T3 | RAG evaluation + answer check | Tamim | 2 | done (Recall@5 94.8%, refusal 100%, voice 3.4 s; team marks of answer_check.csv pending) |
 | 32 | D2-R3 | Demo data + scenario checks | Ariful | 1 | |
 | 33 | D2-A3 | Voice and API tests + hardening | Ragib | 1 | |
 | 34 | D2-ALL-1 | Full demo rehearsal + fixes | All | 1 | |

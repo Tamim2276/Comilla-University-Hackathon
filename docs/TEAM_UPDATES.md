@@ -6,6 +6,23 @@ Nothing secret belongs in this file. Keys and Twilio values are shared privately
 
 ---
 
+## 7. Evaluation results, and 15 minutes of checking for you (D2-T3), 21 Nov
+
+**What changed**
+- `python -m scripts.eval_rag` measured the whole system against SRS 11 (results in `docs/results/rag_eval.md`): search finds the right service in the top 5 for 94.8 % of test questions (target 90 %), 37 of 37 off-topic questions got the safe FALLBACK answer (target 95 %), and phone answers take 3.4 s median (target 5 s).
+- The last SRS target, answer correctness (90 %), needs people: `docs/results/answer_check.csv` holds 32 real answers to check.
+
+**You need to** (Ragib takes rows 1 to 16, Ariful rows 17 to 32)
+1. Open `docs/results/answer_check.csv` in Excel or Google Sheets (it is UTF-8, Bangla shows correctly).
+2. For each of your rows, read `question`, `speech_text` and `checklist`, open the link in `sources`, and check the answer against the official page.
+3. Write `yes` in `correct` if everything stated is right and it answers the question; `no` if anything is wrong, missing the point, or misleading, with a short note in `notes`. A `fallback` row is `yes` if the official documents really do not say it.
+4. Save as CSV (UTF-8) and commit it on your branch, or send it to Tamim. He runs `python -m scripts.eval_rag --score`, which adds the result to the report.
+
+**Good to know**
+- Do not rerun `eval_rag` without `--score` after marking: it would refuse anyway, to protect your marks.
+
+---
+
 ## 6. Question clusters API for the dashboard (D2-T2), 21 Nov
 
 **What changed**
