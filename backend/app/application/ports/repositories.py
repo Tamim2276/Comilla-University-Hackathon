@@ -21,6 +21,20 @@ class ChecklistRecord:
     created_at: datetime
 
 
+OTHER_SERVICE = "other"  # the router label for questions outside the 8 services
+
+
+@dataclass(frozen=True)
+class QuestionStats:
+    """Counts over all logged questions, for the admin dashboard (FR-ADM-01, SRS 3.4)."""
+
+    total: int
+    by_status: Mapping[str, int]  # AnswerStatus value -> count
+    by_service: Mapping[str, int]  # service id -> count; questions without a service count as "other"
+    by_channel: Mapping[str, int]  # Channel value -> count
+    avg_latency_ms: float  # over questions that got a reply (every status except "error"); 0 if none
+
+
 @runtime_checkable
 class ConversationRepo(Protocol):
     def get_or_create(self, phone: PhoneNumber) -> str:
@@ -74,6 +88,14 @@ class QuestionLogRepo(Protocol):
 
     def set_cluster_ids(self, assignments: Mapping[int, int]) -> None:
         """log id -> cluster id."""
+        ...
+
+    def stats(self) -> QuestionStats:
+        """Totals for the admin dashboard, computed in the database (FR-ADM-01)."""
+        ...
+
+    def delete_demo(self) -> int:
+        """Removes the sample rows written by scripts/seed_demo_data.py (is_demo=True); returns how many."""
         ...
 
 

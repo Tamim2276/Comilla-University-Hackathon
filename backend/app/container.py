@@ -28,6 +28,7 @@ from app.application.ports.repositories import (
     ConversationRepo,
     QuestionLogRepo,
 )
+from app.application.use_cases.admin import GetAdminStats, ListQuestions
 from app.application.use_cases.ask_question import AskQuestion
 from app.application.use_cases.clusters import ListClusters, RebuildClusters
 from app.application.use_cases.history import DeleteHistory, GetHistory
@@ -209,7 +210,7 @@ class Container:
     # (steps D1-A3, D1-A5, D2-A1, D2-R2, D2-A2).
 
     # ------------------------------------------------------------ SMS, background and admin area
-    # sms + runner (D1-A4, also passed into ask_question above); admin use cases come in D2-R1.
+    # sms + runner (D1-A4, also passed into ask_question above); admin use cases (D2-R1).
 
     @cached_property
     def sms(self) -> SmsSender:
@@ -223,6 +224,16 @@ class Container:
     def runner(self) -> BackgroundRunner:
         """Background work: SMS (D1-A4), call-back (D2-A1) and async voice answers (D2-A2)."""
         return ThreadPoolRunner(max_workers=4)
+
+    @cached_property
+    def get_admin_stats(self) -> GetAdminStats:
+        """FR-ADM-01: dashboard KPIs, per service and per channel, calls today."""
+        return GetAdminStats(self.question_logs, self.calls, self.services)
+
+    @cached_property
+    def list_questions(self) -> ListQuestions:
+        """FR-ADM-02: newest questions, e.g. only the unanswered (fallback) ones."""
+        return ListQuestions(self.question_logs, self.services)
 
     # ------------------------------------------------------------ AI area
     # Planned here: classifier (tfidf | banglabert | llm), the LangGraph engine (replaces answer_engine
