@@ -784,6 +784,8 @@ Checklist before going on stage: laptop charged, hotspot on, ngrok URL matches T
 | Twilio error 13331 | `language` not valid for the speech model | Try `bn-IN`, or set a `speechModel` that supports Bengali (see Twilio `<Gather>` docs) |
 | Error 11200 / timeout | Reply took too long (about 15 s limit) | Voice fast mode, cache, async answer (D2-A2) |
 | Call-back never rings | Number not verified (trial) or Bangladesh not enabled in Geo permissions | Verify number; enable Bangladesh |
+| The number is "not found": missing under Phone Numbers > Active numbers, the API lists no numbers, nowhere to set "A call comes in" | The trial number is a shared Twilio-owned number, not owned by the account (the account ID and token are fine; calls from it still work) | Set the incoming-call webhook in Console > Try out Voice > Receive a call > Custom > Webhook URL `https://<ngrok-url>/voice/incoming` (POST) > Save. One webhook at a time; callers must be verified numbers; a trial message plays first; calls last at most 10 minutes. Outbound calls ("Call me") use `TWILIO_NUMBER` as the From number as usual |
+| Nobody can call the number | On a trial only verified numbers can call in | Console > Verified recipients: add each teammate's phone (about 5 allowed), or upgrade the account |
 | `SpeechResult` empty or wrong | Noise, dialect, too short | Speak clearly near the phone; agent repeats what it heard on low confidence |
 | Gemini 429 / quota | Free tier limit | Key rotation, cache, fast model for grading/verify, fewer eval runs, `LLM_BACKEND=hybrid` |
 | `LLMUnavailable` with Ollama, "connection refused" | Ollama is not running | Start the Ollama app (or `ollama serve`); check `OLLAMA_URL` |

@@ -32,7 +32,7 @@ Do these steps first. The numbered entries below (newest first, 11 down to 1) ex
 - `uvicorn app.main:app --reload --port 8000`, then open `http://localhost:8000/health`: every part says ok (the router says banglabert or tfidf). Test Bangla in Swagger (`http://localhost:8000/docs`), not with curl.
 
 **6. Your own steps** (Section 0.1 of `docs/BUILD_PLAN.md`, Owner column, in that order)
-- **Ragib:** start with D1-A3 (Twilio echo mode). Twilio values come from Tamim privately. Entry 3 explains the `follow_up` answer status, which your call flow must handle ("হ্যাঁ" after a follow-up keeps the same service).
+- **Ragib:** start with D1-A3 (Twilio echo mode). Twilio values come from Tamim privately. Entry 3 explains the `follow_up` answer status, which your call flow must handle ("হ্যাঁ" after a follow-up keeps the same service). **Read entry 12 before you touch Twilio:** the number is a shared trial number (it is not under "Active numbers", that is normal), the webhook is set under Try out Voice > Receive a call, and only verified phones can call in.
 - **Ariful:** start with D1-R3 (app pages and chat page). Entry 6 has the JSON of the two cluster routes for your cluster view. Entries 9 and 10 say checklists can now be longer (several amounts, longer paper lists): wrap them on the card and keep the SMS within 300 characters.
 
 **7. When you finish a step**
@@ -49,6 +49,35 @@ Do these steps first. The numbered entries below (newest first, 11 down to 1) ex
 
 **Later**
 - Later, deployment: Ariful puts the app on Vercel (set `VITE_API_URL` to the backend address Tamim gives you); the backend runs on the demo laptop with ngrok. Details when the time comes.
+
+---
+
+## 12. Twilio: the trial number is shared, how to set its webhook (Ragib), 21 Nov
+
+**What changed**
+- Nothing in the code. The Twilio number in `.env` is a **shared trial number**, so it is not listed under Phone Numbers > Active numbers and the API does not list it. That is why a lookup says "number not found" even though the account ID and token match and calls from the number work.
+
+**You need to** (Ragib, when your voice server is running)
+1. Start `ngrok http 8000` and set `PUBLIC_URL` in `backend/.env` to its address.
+2. Twilio Console (Tamim's account, so Tamim does this or shares his screen): **Try out Voice > Receive a call > Custom > Webhook URL** `https://<your-ngrok-url>/voice/incoming`, POST, Save. Only one webhook exists at a time, so it points to the laptop that is testing.
+3. Phones that call in must be **verified recipients** in the console (about 5 allowed). Ask Tamim to add yours and Ariful's.
+4. Expect a Twilio trial message first, and calls last at most 10 minutes.
+
+**Good to know**
+- "Call me" (outbound) uses the same number as the From number and the values already in `.env`; it needs the recipient to be a verified number too.
+- Troubleshooting rows for this are in `docs/BUILD_PLAN.md` Section 9.
+- Check your setup quickly: the account ID and token are fine if the console works with them; "number not found" in a lookup is expected for a trial number, so do not spend time on it. If a call fails, look at Twilio Console > Monitor > Logs > Errors and match the code with the Section 9 table.
+
+**Limits of the trial number (know them before the demo)**
+- Only **verified phones** can call the number or receive "Call me": Tamim's, yours, Ariful's (about 5 allowed). A judge's own phone will not get through unless it is added or the account is upgraded.
+- A Twilio trial message plays first, and a call lasts at most 10 minutes.
+- The number has **one** incoming webhook, so it reaches one laptop at a time. Say in the group chat who is testing, and update the webhook and `PUBLIC_URL` when the voice laptop changes (the demo laptop at the end).
+
+**Backup plan if calls do not work (decided, no extra work)**
+1. Spend at most 1 hour on Twilio problems on Day 2 morning (Section 9 of the plan).
+2. Demo the voice through the app: the browser microphone (Bangla speech-to-text) and the spoken answer (text-to-speech). It is the same agent and the same answers; only the phone line is missing. Ragib's D1-R7 (mic) and D2-R2 (answer audio) are the steps that make this work, so they matter for the demo.
+3. Tamim makes the live phone call himself from a verified phone, and the "Call me" button in the app rings a verified phone.
+4. Record the 3-minute backup video of the phone call (S1) whenever it works (D2-ALL-2).
 
 ---
 
