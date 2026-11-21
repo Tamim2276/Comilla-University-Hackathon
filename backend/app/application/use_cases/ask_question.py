@@ -1,7 +1,14 @@
-"""Use case: answer one question from any channel (FR-APP-02, FR-CALL-02, NFR-PRIV-01).
+"""Use case: answer one question from any channel (FR-APP-02, FR-CALL-02, FR-SMS-01 to 05, NFR-PRIV-01).
 
-v1 (D1-A2): history -> engine -> save messages, checklist and an anonymous log.
-Added later: SMS after voice answers (D1-A4), answer cache inside the agent (D2-A2).
+history -> engine -> save messages, checklist and an anonymous log -> (voice only) one SMS checklist.
+
+SMS rules (D1-A4):
+- only for a voice call (it has a call SID), only for an `answered` result with a checklist;
+- at most one SMS per service per call (FR-SMS-02): the checklist is saved with sms_sent=True
+  BEFORE the send is queued, so a slow or failed send can never lead to a second SMS;
+- the send runs on the BackgroundRunner and never delays the spoken answer (FR-SMS-04);
+- a failed send is only logged (FR-SMS-05). Logs never contain the phone number.
+The answer cache lives inside the agent (D2-T4), not here.
 """
 
 import logging
@@ -9,10 +16,13 @@ import time
 from collections.abc import Sequence
 
 from app.application.dto import AskResult
+from app.application.formatting import format_sms
+from app.application.ports.background import BackgroundRunner
 from app.application.ports.engine import AnswerEngine
+from app.application.ports.messaging import SmsSender
 from app.application.ports.repositories import ChecklistRepo, ConversationRepo, QuestionLogRepo
 from app.application.privacy import hash_phone
-from app.domain.entities import Answer, Message, QuestionLog, Service
+from app.domain.entities import Answer, Checklist, Message, QuestionLog, Service
 from app.domain.errors import DomainError
 from app.domain.policies import HISTORY_MESSAGES_TO_LOAD
 from app.domain.value_objects import AnswerStatus, Channel, PhoneNumber, Role
@@ -29,13 +39,18 @@ class AskQuestion:
         question_logs: QuestionLogRepo,
         services: Sequence[Service],
         phone_hash_salt: str,
+        sms: SmsSender | None = None,
+        runner: BackgroundRunner | None = None,
     ) -> None:
+        """Without `sms` and `runner` no SMS is sent (the container always passes both)."""
         self._engine = engine
         self._conversations = conversations
         self._checklists = checklists
         self._logs = question_logs
         self._services = {s.id: s for s in services}
         self._salt = phone_hash_salt
+        self._sms = sms
+        self._runner = runner
 
     def execute(self, phone: str, text: str, channel: Channel, call_sid: str | None = None) -> AskResult:
         number = PhoneNumber.parse(phone)  # raises InvalidPhone
@@ -69,9 +84,13 @@ class AskQuestion:
             call_sid,
         )
         if answer.status is AnswerStatus.ANSWERED and answer.checklist is not None:
+            send_sms = self._sms_due(channel, call_sid, answer.checklist)
+            # Saving with sms_sent=True is the "mark first" of FR-SMS-02.
             self._checklists.save(
-                number, answer.checklist, answer.citations, sms_sent=False, call_sid=call_sid
+                number, answer.checklist, answer.citations, sms_sent=send_sms, call_sid=call_sid
             )
+            if send_sms:
+                self._queue_sms(number, answer.checklist)
         self._log(number, channel, question, answer, latency_ms)
         log.info(
             "answered status=%s service=%s latency_ms=%d llm_calls=%d channel=%s",
@@ -80,6 +99,35 @@ class AskQuestion:
 
         service = self._services.get(answer.service_id) if answer.service_id else None
         return AskResult(conversation_id, answer, service, latency_ms)
+
+    def _sms_due(self, channel: Channel, call_sid: str | None, checklist: Checklist) -> bool:
+        """True when this answer is the first one about its service in this call (FR-SMS-01, 02)."""
+        if channel is not Channel.VOICE or not call_sid:
+            return False
+        if self._sms is None or self._runner is None:
+            return False
+        if checklist.service_id not in self._services:
+            log.warning("no SMS: unknown service %s", checklist.service_id)
+            return False
+        return not self._checklists.sms_already_sent(call_sid, checklist.service_id)
+
+    def _queue_sms(self, number: PhoneNumber, checklist: Checklist) -> None:
+        assert self._runner is not None  # checked in _sms_due
+        text = format_sms(checklist, self._services[checklist.service_id])
+        self._runner.submit(self._send_sms, number, text, checklist.service_id)
+
+    def _send_sms(self, number: PhoneNumber, text: str, service_id: str) -> None:
+        """Runs in the background. Never raises; the result is only logged (FR-SMS-05)."""
+        assert self._sms is not None
+        try:
+            ok = self._sms.send(number, text)
+        except Exception:  # an adapter must not raise, but a bug in one must not go unnoticed
+            log.exception("SMS adapter raised for service=%s", service_id)
+            return
+        if ok:
+            log.info("SMS sent service=%s chars=%d", service_id, len(text))
+        else:
+            log.warning("SMS not sent service=%s (the call goes on normally)", service_id)
 
     def _log(
         self,
