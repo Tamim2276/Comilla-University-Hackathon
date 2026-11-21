@@ -76,6 +76,19 @@ export const UI = {
   statusFallback: 'উত্তর নেই',
   statusError: 'সমস্যা',
   demoBadge: 'নমুনা',
+  // question clusters (D2-R5)
+  clustersTitle: 'প্রশ্নের বিষয়ভিত্তিক গ্রুপ',
+  clustersExplain: 'একই রকম প্রশ্নগুলো একসাথে: নাগরিকেরা সবচেয়ে বেশি কী নিয়ে জানতে চাইছেন।',
+  clustersRebuild: 'আবার গ্রুপ করুন',
+  clustersRebuilding: 'গ্রুপ তৈরি হচ্ছে… (১৫ থেকে ৬০ সেকেন্ড)',
+  clustersEmpty: 'এখনো কোনো গ্রুপ নেই। "আবার গ্রুপ করুন" চাপুন।',
+  clustersLoading: 'গ্রুপগুলো আনা হচ্ছে…',
+  clustersExamples: 'উদাহরণ',
+  clustersQuestionsSuffix: 'টি প্রশ্ন',
+  clustersMade: 'টি গ্রুপ তৈরি হয়েছে',
+  clustersFrom: 'টি প্রশ্ন থেকে',
+  clustersByLlm: 'নাম দিয়েছে Gemini',
+  clustersByKeywords: 'নাম: প্রধান শব্দগুলো (Gemini পাওয়া যায়নি)',
 } as const
 
 /** Text the agent uses for a checklist field the official documents do not state. */

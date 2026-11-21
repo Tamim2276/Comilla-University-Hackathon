@@ -116,6 +116,22 @@ export interface AdminQuestion {
   created_at: string
 }
 
+/** One question topic from GET /api/v1/admin/clusters (FR-ADM-04). */
+export interface QuestionCluster {
+  id: number | null
+  label: string
+  size: number
+  examples: string[]
+}
+
+/** Response of POST /api/v1/admin/clusters/rebuild (FR-ADM-03). */
+export interface RebuildResult {
+  clusters: number
+  questions: number
+  /** "llm" = labels written by Gemini, "keywords" = top words (Gemini unavailable). */
+  labelled_by: string
+}
+
 /** A message shown in the chat on screen. */
 export type ChatMessage =
   | { id: string; role: 'user'; text: string }

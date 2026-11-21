@@ -10,6 +10,8 @@ import {
   type ChatRequest,
   type ChatResponse,
   type HistoryResponse,
+  type QuestionCluster,
+  type RebuildResult,
   type Service,
 } from '../domain/types'
 
@@ -17,10 +19,15 @@ interface ErrorBody {
   error?: { code?: string; message_bn?: string; message_en?: string }
 }
 
-export function createApiClient(baseUrl: string, timeoutMs: number, adminToken = ''): ApiPort {
-  async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+export function createApiClient(
+  baseUrl: string,
+  timeoutMs: number,
+  adminToken = '',
+  rebuildTimeoutMs = timeoutMs,
+): ApiPort {
+  async function request<T>(path: string, init: RequestInit = {}, waitMs = timeoutMs): Promise<T> {
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    const timer = setTimeout(() => controller.abort(), waitMs)
     let res: Response
     try {
       res = await fetch(`${baseUrl}${path}`, {
@@ -71,5 +78,13 @@ export function createApiClient(baseUrl: string, timeoutMs: number, adminToken =
       })
       return body.questions
     },
+    adminClusters: async () =>
+      (await request<{ clusters: QuestionCluster[] }>('/api/v1/admin/clusters', { headers: adminHeaders })).clusters,
+    rebuildClusters: () =>
+      request<RebuildResult>(
+        '/api/v1/admin/clusters/rebuild',
+        { method: 'POST', headers: adminHeaders },
+        rebuildTimeoutMs,
+      ),
   }
 }

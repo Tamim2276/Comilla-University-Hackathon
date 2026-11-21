@@ -8,6 +8,8 @@ import type {
   ChatRequest,
   ChatResponse,
   HistoryResponse,
+  QuestionCluster,
+  RebuildResult,
   Service,
 } from '../domain/types'
 
@@ -20,6 +22,10 @@ export interface ApiPort {
   /** Admin dashboard (FR-ADM-01, 02). Sends X-Admin-Token when one is configured. */
   adminStats(): Promise<AdminStats>
   adminQuestions(options?: { status?: AnswerStatus; limit?: number }): Promise<AdminQuestion[]>
+  /** Question topics (FR-ADM-04). */
+  adminClusters(): Promise<QuestionCluster[]>
+  /** Regroups every logged question (FR-ADM-03). Slow: about 15 s, longer on the first run. */
+  rebuildClusters(): Promise<RebuildResult>
 }
 
 /** Where the phone number of this browser is kept (FR-APP-01). */
