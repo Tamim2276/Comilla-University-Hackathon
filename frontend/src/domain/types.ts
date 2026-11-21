@@ -84,6 +84,54 @@ export interface HistoryResponse {
   checklists: ChecklistRecord[]
 }
 
+/** One bar of "questions per service" in GET /api/v1/admin/stats. */
+export interface ServiceCount {
+  id: string
+  name_bn: string
+  count: number
+}
+
+/** Response of GET /api/v1/admin/stats (FR-ADM-01). */
+export interface AdminStats {
+  total_questions: number
+  answered_pct: number
+  fallback_pct: number
+  avg_latency_ms: number
+  calls_today: number
+  by_service: ServiceCount[]
+  by_channel: Record<string, number>
+  by_status: Record<string, number>
+}
+
+/** One row of GET /api/v1/admin/questions (FR-ADM-02). */
+export interface AdminQuestion {
+  text: string
+  status: AnswerStatus
+  channel: Channel
+  service_id: string | null
+  service_name_bn: string | null
+  router: string | null
+  latency_ms: number
+  is_demo: boolean
+  created_at: string
+}
+
+/** One question topic from GET /api/v1/admin/clusters (FR-ADM-04). */
+export interface QuestionCluster {
+  id: number | null
+  label: string
+  size: number
+  examples: string[]
+}
+
+/** Response of POST /api/v1/admin/clusters/rebuild (FR-ADM-03). */
+export interface RebuildResult {
+  clusters: number
+  questions: number
+  /** "llm" = labels written by Gemini, "keywords" = top words (Gemini unavailable). */
+  labelled_by: string
+}
+
 /** A message shown in the chat on screen. */
 export type ChatMessage =
   | { id: string; role: 'user'; text: string }
