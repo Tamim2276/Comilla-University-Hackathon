@@ -4,6 +4,9 @@ import type { ApiPort } from '../application/ports'
 import { MSG } from '../domain/messages'
 import {
   ApiError,
+  type AdminQuestion,
+  type AdminStats,
+  type AnswerStatus,
   type ChatRequest,
   type ChatResponse,
   type HistoryResponse,
@@ -14,7 +17,7 @@ interface ErrorBody {
   error?: { code?: string; message_bn?: string; message_en?: string }
 }
 
-export function createApiClient(baseUrl: string, timeoutMs: number): ApiPort {
+export function createApiClient(baseUrl: string, timeoutMs: number, adminToken = ''): ApiPort {
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -46,6 +49,7 @@ export function createApiClient(baseUrl: string, timeoutMs: number): ApiPort {
   }
 
   const phonePath = (phone: string) => `/api/v1/conversations/${encodeURIComponent(phone)}`
+  const adminHeaders: Record<string, string> = adminToken ? { 'X-Admin-Token': adminToken } : {}
 
   return {
     chat: (body: ChatRequest) =>
@@ -58,5 +62,14 @@ export function createApiClient(baseUrl: string, timeoutMs: number): ApiPort {
       request<HistoryResponse>(`${phonePath(phone)}?limit=${limit}`),
     deleteHistory: async (phone: string) =>
       (await request<{ deleted: boolean }>(phonePath(phone), { method: 'DELETE' })).deleted,
+    adminStats: () => request<AdminStats>('/api/v1/admin/stats', { headers: adminHeaders }),
+    adminQuestions: async (options: { status?: AnswerStatus; limit?: number } = {}) => {
+      const query = new URLSearchParams({ limit: String(options.limit ?? 20) })
+      if (options.status) query.set('status', options.status)
+      const body = await request<{ questions: AdminQuestion[] }>(`/api/v1/admin/questions?${query}`, {
+        headers: adminHeaders,
+      })
+      return body.questions
+    },
   }
 }

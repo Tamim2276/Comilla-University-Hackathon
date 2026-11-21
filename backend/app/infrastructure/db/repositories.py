@@ -6,12 +6,13 @@ Each method opens its own short session and commits, so callers never deal with 
 import json
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.ports.clustering import Cluster
-from app.application.ports.repositories import ChecklistRecord
+from app.application.ports.repositories import OTHER_SERVICE, ChecklistRecord, QuestionStats
 from app.domain.entities import Checklist, Citation, Message, QuestionLog
 from app.domain.errors import NotFound
 from app.domain.value_objects import AnswerStatus, Channel, PhoneNumber, Role, RouterSource
@@ -195,6 +196,37 @@ class SqlQuestionLogRepo:
                 if row is not None:
                     row.cluster_id = cluster_id
             s.commit()
+
+    def stats(self) -> QuestionStats:
+        with self._sessions() as s:
+
+            def counts(column: Any) -> dict[str, int]:
+                rows = s.execute(select(column, func.count(QuestionLogRow.id)).group_by(column)).all()
+                result: dict[str, int] = {}
+                for key, n in rows:  # NULL and "other" are two groups in SQL: add them up, never overwrite
+                    name = key or OTHER_SERVICE
+                    result[name] = result.get(name, 0) + int(n)
+                return result
+
+            avg = s.scalar(
+                select(func.avg(QuestionLogRow.latency_ms)).where(
+                    QuestionLogRow.status != AnswerStatus.ERROR.value
+                )
+            )
+            by_status = counts(QuestionLogRow.status)
+            return QuestionStats(
+                total=sum(by_status.values()),
+                by_status=by_status,
+                by_service=counts(QuestionLogRow.service_id),
+                by_channel=counts(QuestionLogRow.channel),
+                avg_latency_ms=float(avg or 0.0),
+            )
+
+    def delete_demo(self) -> int:
+        with self._sessions() as s:
+            result = s.execute(delete(QuestionLogRow).where(QuestionLogRow.is_demo.is_(True)))
+            s.commit()
+            return int(result.rowcount or 0)  # type: ignore[attr-defined]
 
 
 class SqlCallRepo:
