@@ -34,7 +34,7 @@ Each person follows their own rows top to bottom. A step only needs the steps ab
 | 3 | D1-T1 | Domain, ports, fakes, architecture test | Tamim | 4 | done |
 | 4 | D1-A1 | Config, DB, container, `/health` | Tamim | 4 | done |
 | 5 | D1-A2 | Chat API with a stub engine | Tamim | 3 | done |
-| 6 | D1-R1 | Official documents for all 8 services | Tamim | 5 | done (1 birth registration link still to add: faq.md) |
+| 6 | D1-R1 | Official documents for all 8 services | Tamim | 5 | done (all 5 birth registration documents have real links) |
 | 7 | D1-T2 | Embedder, Chroma, ingest | Tamim | 4 | done |
 | 8 | D1-R2 | Seed, test and out-of-scope questions | Tamim | 3 | done |
 | 9 | D1-T3 | Gemini, Ollama and hybrid LLM adapters | Tamim | 3 | done (live Gemini check passed 21 Nov) |

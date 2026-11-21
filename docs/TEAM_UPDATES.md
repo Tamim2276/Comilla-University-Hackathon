@@ -6,13 +6,14 @@ Nothing secret belongs in this file. Keys and Twilio values are shared privately
 
 ---
 
-## 8. Two more official documents in the search index, 21 Nov
+## 8. Birth registration documents complete, search index rebuilt, 21 Nov
 
 **What changed**
-- The birth registration rules (2018 gazette) and the 2004 Act now have real source links, so they are in the search index: birth registration went from 2 to 4 documents (49 searchable passages). Search finds the right service for 95.8 % of test questions now (was 94.8 %), and birth registration for 83 % (was 75 %). One more document (the FAQ) waits for its link.
+- The birth registration rules (2018 gazette), the 2004 Act and the FAQ now have real source links, so all 5 birth registration documents are in the search index (58 searchable passages, was 2 documents). Search finds the right service for 97.9 % of test questions now (was 94.8 %), and for birth registration 100 % (was 75 %). A question that used to get the "no confident information" reply (birth number not 17 digits) now gets a real answer with the FAQ as its source.
+- `python -m scripts.ingest` now also clears the answer cache, so answers made from old documents are never served after the documents change.
 
 **You need to**
-1. Pull `main`, merge it into your branch, then in `backend/` run `python -m scripts.ingest` (about a minute) to rebuild your local search index. Without this your answers still use the old, smaller index.
+1. Pull `main`, merge it into your branch, then in `backend/` run `python -m scripts.ingest` (about a minute) to rebuild your local search index and clear your old cached answers. Without this your answers still use the old, smaller index.
 
 **Good to know**
 - Answers about birth registration may now cite the rules or the Act (a new source link in the checklist card and SMS).
