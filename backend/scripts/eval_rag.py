@@ -30,7 +30,7 @@ from datetime import date
 from app.config import BACKEND_DIR, Settings
 from app.container import Container
 from app.domain.entities import Answer
-from app.domain.errors import DomainError
+from app.domain.errors import DomainError, LLMUnavailable
 from app.domain.messages_bn import FALLBACK
 from app.domain.policies import TOP_K
 from app.domain.value_objects import AnswerStatus, Channel
@@ -42,6 +42,8 @@ RESULTS = BACKEND_DIR.parent / "docs" / "results"
 REPORT = RESULTS / "rag_eval.md"
 ANSWER_CSV = RESULTS / "answer_check.csv"
 SEED = 7
+BUSY_ATTEMPTS = 3  # a question is tried this many times when Gemini says "high demand"
+BUSY_WAIT_SECONDS = 10
 START, END = "<!-- correctness:start -->", "<!-- correctness:end -->"
 YES = {"yes", "y", "1", "true", "ঠিক", "হ্যাঁ", "correct"}
 NO = {"no", "n", "0", "false", "ভুল", "না", "incorrect", "wrong"}
@@ -107,11 +109,18 @@ def ask_all(
 ) -> list[Run]:
     runs = []
     for i, (question, service) in enumerate(rows, 1):
-        started = time.perf_counter()
-        try:
-            answer, error = engine.answer(question, [], channel), ""
-        except DomainError as exc:
-            answer, error = None, exc.code
+        answer, error = None, ""
+        for _ in range(BUSY_ATTEMPTS):
+            started = time.perf_counter()  # a busy-Gemini retry is not part of the measured time
+            try:
+                answer, error = engine.answer(question, [], channel), ""
+                break
+            except LLMUnavailable as exc:  # Gemini overloaded (503): wait and try again
+                answer, error = None, exc.code
+                time.sleep(BUSY_WAIT_SECONDS)
+            except DomainError as exc:
+                answer, error = None, exc.code
+                break
         runs.append(Run(question, service, answer, time.perf_counter() - started, error))
         status = answer.status.value if answer else f"ERROR {error}"
         print(f"  {title} {i}/{len(rows)}  {status:<10} {runs[-1].seconds:5.1f} s  {question[:50]}")

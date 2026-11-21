@@ -6,6 +6,52 @@ Nothing secret belongs in this file. Keys and Twilio values are shared privately
 
 ---
 
+## Start here: everything to do once, in order (Ragib and Ariful)
+
+Do these steps first. The numbered entries below (newest first, 11 down to 1) explain what changed and why; read them from the top until you reach one you already read.
+
+**1. Get the latest code**
+- `git checkout main`, then `git pull origin main`.
+- Already have a branch? `git checkout <your-branch>`, then `git merge main`. New step? `git checkout -b <your-name>/<step>-<short-name>` (Section 0.3 of `docs/BUILD_PLAN.md`). Run git commands from the project root.
+
+**2. Set up your laptop** (skip what is already done): `docs/SETUP.md` sections 1 to 6 (tools, venv, requirements). Troubleshooting: section 10.
+
+**3. Fill your `backend/.env`** (write each value right after the `=`, no comment on the same line)
+- From Tamim, privately: `GEMINI_API_KEYS`, `GEMINI_MODEL_MAIN=gemini-3.5-flash-lite`, `GEMINI_MODEL_FAST=gemini-3.5-flash-lite`. Also set `LLM_BACKEND=gemini`.
+- Add these: `PRELOAD_MODELS=true`, `ROUTER_BACKEND=banglabert` (without the model folder it falls back to TF-IDF by itself), `AGENT_ENGINE=langgraph`.
+- No keys yet, or the key limit is reached? Use `AGENT_ENGINE=stub` (a fixed sample answer) and keep building. Nothing else changes for you.
+- Never commit `.env`, never paste keys into a chat that keeps history.
+
+**4. Build the search index and the router** (`backend/` folder, venv active, PowerShell: first `$env:PYTHONIOENCODING = "utf-8"`)
+- `python -m scripts.train_baseline` (seconds; makes the TF-IDF router).
+- `python -m scripts.ingest` (about a minute; builds the search index from the official documents and clears old cached answers). **Run it again after every pull that changes `backend/data/raw_docs/`.**
+
+**5. Check that it works**
+- `python -m scripts.ask "আমার বয়স ৬৭, বয়স্ক ভাতা পাবো?"` prints a Bangla answer with sources (first run takes longer while models load).
+- `ruff check .` and `pytest -q` are green.
+- `uvicorn app.main:app --reload --port 8000`, then open `http://localhost:8000/health`: every part says ok (the router says banglabert or tfidf). Test Bangla in Swagger (`http://localhost:8000/docs`), not with curl.
+
+**6. Your own steps** (Section 0.1 of `docs/BUILD_PLAN.md`, Owner column, in that order)
+- **Ragib:** start with D1-A3 (Twilio echo mode). Twilio values come from Tamim privately. Entry 3 explains the `follow_up` answer status, which your call flow must handle ("হ্যাঁ" after a follow-up keeps the same service).
+- **Ariful:** start with D1-R3 (app pages and chat page). Entry 6 has the JSON of the two cluster routes for your cluster view. Entries 9 and 10 say checklists can now be longer (several amounts, longer paper lists): wrap them on the card and keep the SMS within 300 characters.
+
+**7. When you finish a step**
+- Run the step's Done-check, `ruff check .`, `pytest -q` (and `npm run build` if you touched the app).
+- Name the step in your pull request title, change only files you own (Section 0.4), never edit `main.py`, `schemas.py`, `deps.py` or `docs/SRS.md`.
+- Tell Tamim, so he can update the Status column and add an entry here.
+
+**What Tamim gives you privately (not in this file)**
+- Gemini keys and model names; the Twilio values and your verified number (Ragib); access to the repo (collaborator invitation).
+- The BanglaBERT router folder (about 450 MB, for the demo laptop only) when it is time.
+
+**Your first task together (about 15 minutes each)**
+- Mark the answer check (entry 7): Ragib rows 1 to 16, Ariful rows 17 to 32 of `docs/results/answer_check.csv`. Do it after step 5 above, so you have the same documents. Send your marked file to Tamim (or commit it on your branch).
+
+**Later**
+- Later, deployment: Ariful puts the app on Vercel (set `VITE_API_URL` to the backend address Tamim gives you); the backend runs on the demo laptop with ngrok. Details when the time comes.
+
+---
+
 ## 11. Trade licence: Dhaka South added, 21 Nov
 
 **What changed**
@@ -64,9 +110,11 @@ Nothing secret belongs in this file. Keys and Twilio values are shared privately
 
 ## 7. Evaluation results, and 15 minutes of checking for you (D2-T3), 21 Nov
 
+**READY: please mark your rows now.** `docs/results/answer_check.csv` was regenerated at the end of 21 Nov with the final documents (it replaces the first version; if you opened an older copy, discard it).
+
 **What changed**
-- `python -m scripts.eval_rag` measured the whole system against SRS 11 (results in `docs/results/rag_eval.md`): search finds the right service in the top 5 for 94.8 % of test questions (target 90 %), 37 of 37 off-topic questions got the safe FALLBACK answer (target 95 %), and phone answers take 3.4 s median (target 5 s).
-- The last SRS target, answer correctness (90 %), needs people: `docs/results/answer_check.csv` holds 32 real answers to check.
+- `python -m scripts.eval_rag` measured the whole system against SRS 11 (results in `docs/results/rag_eval.md`, final run): search finds the right service in the top 5 for 96.9 % of test questions (target 90 %), 37 of 37 off-topic questions got the safe FALLBACK answer (target 95 %), and phone answers take about 3.6 to 5.1 s median depending on how busy Gemini is (target 5 s).
+- The last SRS target, answer correctness (90 %), needs people: `docs/results/answer_check.csv` holds 32 real answers to check (29 answered, 3 safe fallbacks).
 
 **You need to** (Ragib takes rows 1 to 16, Ariful rows 17 to 32)
 1. Open `docs/results/answer_check.csv` in Excel or Google Sheets (it is UTF-8, Bangla shows correctly).
