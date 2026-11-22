@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, Form, Query, Request, Response
 from app.application.use_cases.handle_call_end import HandleCallEnd, RecordCallStart
 from app.application.use_cases.speech import VoiceReply
 from app.application.use_cases.start_callback import HandleMissedCall
-from app.application.use_cases.voice_jobs import Pending, VoiceAnswers
+from app.application.use_cases.voice_jobs import GAVE_UP, Pending, VoiceAnswers
 from app.interfaces.api.deps import get_container
 from app.interfaces.voice import twiml
 from app.interfaces.voice.call_state import SilenceCounter
@@ -145,7 +145,11 @@ def respond(
 
     silences.heard(call_sid)
     log.info("voice heard call_sid=%s text=%s", call_sid, text)
-    outcome = answers.start(call_sid, citizen_number(from_, to, direction), text, direction)
+    try:
+        outcome = answers.start(call_sid, citizen_number(from_, to, direction), text, direction)
+    except Exception:  # NFR-REL-01: a 500 would make Twilio say "application error" and hang up
+        log.exception("voice turn crashed call_sid=%s", call_sid)
+        outcome = GAVE_UP
     if isinstance(outcome, Pending):
         return _twiml(twiml.wait_for_answer(cfg, outcome.job_id))
     return _speak(cfg, silences, call_sid, outcome)
@@ -160,7 +164,11 @@ def result(
     call_sid: CallSid = "",
 ) -> Response:
     """FR-CALL-10: the answer of a slow turn, once it is ready (Twilio follows our <Redirect>)."""
-    outcome = answers.result(job)
+    try:
+        outcome = answers.result(job)
+    except Exception:  # NFR-REL-01, see respond()
+        log.exception("voice result crashed call_sid=%s job=%s", call_sid, job)
+        outcome = GAVE_UP
     if isinstance(outcome, Pending):
         return _twiml(twiml.keep_waiting(cfg, outcome.job_id))
     return _speak(cfg, silences, call_sid, outcome)
