@@ -49,11 +49,11 @@ Each person follows their own rows top to bottom. A step only needs the steps ab
 | 18 | D1-A5 | Voice wired to AskQuestion + SMS: Checkpoint 2 | Ragib | 4 | done |
 | 19 | D1-R5 | Checklist card, sources, history page | Ariful | 3 | done |
 | 20 | D1-R7 | Mic input in the app | Ragib | 1 | done |
-| 21 | D1-R6 | App flow tests + demo phrases | Ragib | 1 | |
-| 22 | D2-A1 | Call-back API, missed call, signature check | Ragib | 4 | |
+| 21 | D1-R6 | App flow tests + demo phrases | Ragib | 1 | done |
+| 22 | D2-A1 | Call-back API, missed call, signature check | Ragib | 4 | done |
 | 23 | D2-T1 | BanglaBERT adapter + router evaluation | Tamim | 3 | done (93.5%, 95.4% after LLM, 34 ms) |
 | 24 | D2-R1 | Admin APIs + dashboard | Ariful | 4 | done |
-| 25 | D2-R2 | "Call me" button + answer audio (TTS) | Ragib | 2 | |
+| 25 | D2-R2 | "Call me" button + answer audio (TTS) | Ragib | 2 | done |
 | 26 | D2-A2 | Async voice answer + voice error paths | Ragib | 2 | done |
 | 27 | D2-T4 | Answer cache in the agent + pre-warm | Tamim | 1 | done |
 | 28 | D2-T2 | K-Means clusters + cluster APIs | Tamim | 2 | done |
@@ -61,7 +61,7 @@ Each person follows their own rows top to bottom. A step only needs the steps ab
 | 30 | D2-R4 | App polish, 360 px check, PWA | Ariful | 1 | done |
 | 31 | D2-T3 | RAG evaluation + answer check | Tamim | 2 | done (Recall@5 96.9%, refusal 100%, answer check 100% correct, 32 of 32) |
 | 32 | D2-R3 | Demo data + scenario checks | Ariful | 1 | |
-| 33 | D2-A3 | Voice and API tests + hardening | Ragib | 1 | |
+| 33 | D2-A3 | Voice and API tests + hardening | Ragib | 1 | done |
 | 34 | D2-ALL-1 | Full demo rehearsal + fixes | All | 1 | |
 | 35 | D2-ALL-2 | README, architecture doc, results, backup video | All | 2 | |
 

@@ -532,7 +532,7 @@ Error format for all endpoints: `{"error": {"code": "LLM_UNAVAILABLE", "message_
 
 | # | Use case | Steps | Expected result |
 |---|---|---|---|
-| S1 | UC1 Elderly caller | Call (or "Call me"), ask "আমার বয়স ৬৭। আমি কি বয়স্ক ভাতা পাবো? কী কী লাগবে?" | Router: `old_age_allowance`. Short Bangla answer with age rules, free, NID needed; SMS arrives with checklist. |
+| S1 | UC1 Elderly caller | Call (or "Call me"), ask "আমার বয়স ৬৭। আমি কি বয়স্ক ভাতা পাবো? কী কী লাগবে?" | Router: `old_age_allowance`. Short Bangla answer with age rules and NID needed (the fee is "তথ্য পাওয়া যায়নি": no official document states one); SMS arrives with checklist. |
 | S2 | UC2 Follow-up | Ask "বিধবা ভাতার জন্য কী লাগে?" | Agent may ask about permanent residence, then answers after "হ্যাঁ" (same service kept, FR-AGT-17; "হ্যাঁ" does not end the call). |
 | S3 | UC3 SMS | After S1 | Exactly one SMS for that service, at most 300 characters. |
 | S4 | UC4 App | Type "NID-te namer banan bhul, ki korbo?" | `nid_correction`; checklist card + at least 1 source link. |
