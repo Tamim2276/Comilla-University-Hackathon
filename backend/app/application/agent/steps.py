@@ -27,6 +27,7 @@ from app.domain.value_objects import AnswerStatus, Channel, Role, RouterSource
 log = logging.getLogger(__name__)
 
 SNIPPET_WORDS = 30
+SHORT_QUESTION_WORDS = 6  # a question this short, after an answer, may only make sense with the conversation
 UNKNOWN_BN = "তথ্য পাওয়া যায়নি"
 _BANGLA_DIGITS = str.maketrans("0123456789", "০১২৩৪৫৬৭৮৯")
 
@@ -67,6 +68,15 @@ def pending_follow_up(history: Sequence[Message]) -> tuple[str | None, str | Non
     return None, None
 
 
+def previous_service(history: Sequence[Message]) -> str | None:
+    """The service of the last assistant turn (a real service, not `other`), if any."""
+    for message in reversed(history):
+        if message.role is Role.ASSISTANT:
+            service = message.service_id
+            return service if service and service != OTHER else None
+    return None
+
+
 def _clamp(value: Any) -> float:
     try:
         return min(1.0, max(0.0, float(value)))
@@ -105,9 +115,20 @@ def classify(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
         "pending_service_id": None, "candidates": candidates, "service_id": label,
         "confidence": confidence, "router_source": deps.classifier.source, "query": question,
     }  # fmt: skip
+    local = deps.classifier.source is not RouterSource.LLM
+    previous = previous_service(state.get("history", ()))
+    if (
+        local
+        and previous in deps.services
+        and label != previous
+        and len(question.split()) <= SHORT_QUESTION_WORDS
+    ):
+        # "আর কোথায় জমা দেবো?" has no topic of its own: a local router guesses a wrong service, even
+        # with high confidence. Let the LLM decide with the last turns, and never cache this question.
+        update["needs_context"] = True
+        return update
     # FR-AGT-15: cache only when the local router was sure, so short replies such as "হ্যাঁ"
     # (which depend on the conversation) are never served from the cache.
-    local = deps.classifier.source is not RouterSource.LLM
     if deps.cache is not None and local and label != OTHER and confidence >= deps.confidence_threshold:
         update["cache_key"] = cache_key(question, label, state["channel"])
     return update
@@ -218,6 +239,7 @@ def verify(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
             state.get("passages") or [],
             display=_text(draft.get("display_text")),
             checklist=checklist,
+            question=state.get("question", ""),
         ),
         prompts.VERIFY_SCHEMA,
         role=ModelRole.MAIN,
@@ -240,8 +262,12 @@ def verify(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     display_ok = bool(data.get("display_supported", True))
     if bad_fields or not display_ok:
         log.info("verify: checklist fields unsupported %s, screen text supported %s", bad_fields, display_ok)
+    answers = bool(data.get("answers_question", True))
+    if not answers:
+        log.info("verify: the answer is about another question than the one asked")
     return {
         "verified_claims": checked,
+        "answers_question": answers,
         "speech_supported": bool(data.get("speech_supported", True)),
         "display_supported": display_ok,
         "unsupported_checklist": bad_fields,

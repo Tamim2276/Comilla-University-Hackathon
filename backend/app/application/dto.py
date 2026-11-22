@@ -12,6 +12,9 @@ class AskResult:
     answer: Answer
     service: Service | None
     latency_ms: int
+    # True when this answer queued the SMS checklist (voice, first answer about the service in the call).
+    # The call then says SMS_SENT itself (FR-SMS-01); False for the app and for every later turn.
+    sms_scheduled: bool = False
 
 
 @dataclass(frozen=True)

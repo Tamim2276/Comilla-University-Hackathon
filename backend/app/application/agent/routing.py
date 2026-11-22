@@ -31,6 +31,8 @@ def _retry_or_fallback(state: AgentState, max_retries: int) -> str:
 def after_classify(state: AgentState, threshold: float) -> str:
     if state.get("pending_service_id"):
         return RETRIEVE  # FR-AGT-17: keep the service of the pending follow-up
+    if state.get("needs_context") and state.get("router_source") is not RouterSource.LLM:
+        return LLM_CLASSIFY  # a short follow-up question: the LLM reads the last turns
     label = state.get("service_id")
     confident = state.get("confidence", 0.0) >= threshold
     if confident or state.get("router_source") is RouterSource.LLM:  # the LLM router is not asked twice
@@ -69,6 +71,8 @@ def after_generate(state: AgentState, max_retries: int) -> str:
 
 def after_verify(state: AgentState, max_retries: int) -> str:
     """All core claims and the spoken answer supported -> finalize; else retry, then fall back (FR-AGT-10)."""
+    if state.get("answers_question") is False:
+        return FALLBACK  # true facts, but for another question: a retry would not change that
     claims = state.get("verified_claims") or []
     supported = [c for c in claims if c.get("supported")]
     core_failed = any(c.get("core") and not c.get("supported") for c in claims)

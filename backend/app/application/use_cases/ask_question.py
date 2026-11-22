@@ -83,6 +83,7 @@ class AskQuestion:
             ),  # fmt: skip
             call_sid,
         )
+        send_sms = False
         if answer.status is AnswerStatus.ANSWERED and answer.checklist is not None:
             send_sms = self._sms_due(channel, call_sid, answer.checklist)
             # Saving with sms_sent=True is the "mark first" of FR-SMS-02.
@@ -98,7 +99,7 @@ class AskQuestion:
         )  # fmt: skip
 
         service = self._services.get(answer.service_id) if answer.service_id else None
-        return AskResult(conversation_id, answer, service, latency_ms)
+        return AskResult(conversation_id, answer, service, latency_ms, sms_scheduled=send_sms)
 
     def _sms_due(self, channel: Channel, call_sid: str | None, checklist: Checklist) -> bool:
         """True when this answer is the first one about its service in this call (FR-SMS-01, 02)."""

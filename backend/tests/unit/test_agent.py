@@ -299,13 +299,13 @@ def test_generate_without_passages_skips_the_llm() -> None:
     assert steps.generate({"question": "q", "passages": []}, d) == {"draft": {"no_answer": True}}
 
 
-def test_generate_prompt_numbers_passages_and_mentions_sms_on_voice() -> None:
+def test_generate_prompt_numbers_passages_and_leaves_the_sms_sentence_to_the_call() -> None:
     llm = FakeLLM([GOOD_DRAFT])
     state: AgentState = {"question": "বয়স?", "service_id": "old_age_allowance", "passages": PASSAGES,
                          "history": [], "channel": Channel.VOICE}  # fmt: skip
     assert steps.generate(state, deps(llm=llm))["llm_calls"] == 1
     assert "[P1] বয়স্ক ভাতা:" in llm.prompts[0] and "[P3] নীতিমালা:" in llm.prompts[0]
-    assert "SMS" in llm.prompts[0]
+    assert "Do not mention SMS" in llm.prompts[0]  # speech.py says SMS_SENT only when one is queued
 
 
 def test_finalize_builds_a_valid_answer() -> None:  # FR-AGT-08, 11, 12

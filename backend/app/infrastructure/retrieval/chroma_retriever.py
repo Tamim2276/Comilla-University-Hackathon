@@ -69,16 +69,19 @@ class ChromaRetriever:
             return 0
 
     def rebuild(self, chunks: Sequence[Chunk]) -> int:
-        """Replaces the whole collection with `chunks` (FR-DATA-03: re-running replaces it)."""
+        """Replaces the whole collection with `chunks` (FR-DATA-03: re-running replaces it).
+
+        The new index is built under a temporary name and swapped in at the end, so a server that
+        is answering questions meanwhile keeps using the old index instead of finding nothing.
+        """
         from chromadb.errors import NotFoundError
 
+        building = f"{self._collection_name}_building"
         try:
-            self.client.delete_collection(self._collection_name)
+            self.client.delete_collection(building)  # left over from a crashed run
         except NotFoundError:
             pass
-        collection = self.client.create_collection(
-            self._collection_name, configuration={"hnsw": {"space": "cosine"}}
-        )
+        collection = self.client.create_collection(building, configuration={"hnsw": {"space": "cosine"}})
         for start in range(0, len(chunks), _ADD_BATCH):
             batch = list(chunks[start : start + _ADD_BATCH])
             collection.add(
@@ -96,7 +99,12 @@ class ChromaRetriever:
                     for c in batch
                 ],
             )
-        return int(collection.count())
+        try:
+            self.client.delete_collection(self._collection_name)
+        except NotFoundError:
+            pass
+        collection.modify(name=self._collection_name)  # the swap: a few milliseconds
+        return int(self._collection().count())
 
     # ---------------------------------------------------------------- search (Retriever port)
 

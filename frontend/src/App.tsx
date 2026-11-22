@@ -2,6 +2,7 @@
 
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { useSession } from './application/useSession'
+import { OfflineBanner } from './presentation/components/OfflineBanner'
 import { AdminPage } from './presentation/pages/AdminPage'
 import { ChatPage } from './presentation/pages/ChatPage'
 import { HistoryPage } from './presentation/pages/HistoryPage'
@@ -12,6 +13,7 @@ function App() {
 
   return (
     <BrowserRouter>
+      <OfflineBanner />
       <Routes>
         <Route path="/" element={<StartPage session={session} />} />
         <Route
