@@ -216,6 +216,34 @@ class Container:
 
         return SilenceCounter()
 
+    @cached_property
+    def handle_voice_turn(self) -> "HandleVoiceTurn":  # noqa: F821 (imported below, see silence_counter)
+        """FR-CALL-02, 05, 06, 09: one spoken turn, answered by the same AskQuestion as the app."""
+        from app.application.use_cases.speech import HandleVoiceTurn
+
+        return HandleVoiceTurn(self.ask_question.execute, self.calls, self.conversations)
+
+    @cached_property
+    def record_call_start(self) -> "RecordCallStart":  # noqa: F821
+        """FR-CALL-11: the calls row for /voice/incoming and /voice/start."""
+        from app.application.use_cases.handle_call_end import RecordCallStart
+
+        return RecordCallStart(self.calls)
+
+    @cached_property
+    def handle_call_end(self) -> "HandleCallEnd":  # noqa: F821
+        """FR-CALL-11: end time from the Twilio status callback."""
+        from app.application.use_cases.handle_call_end import HandleCallEnd
+
+        return HandleCallEnd(self.calls)
+
+    @cached_property
+    def voice_answers(self) -> "VoiceAnswers":  # noqa: F821
+        """FR-CALL-10: turns run in the background; slow answers come through /voice/result."""
+        from app.application.use_cases.voice_jobs import VoiceAnswers
+
+        return VoiceAnswers(self.handle_voice_turn.execute, self.runner)
+
     # ------------------------------------------------------------ SMS, background and admin area
     # sms + runner (D1-A4, also passed into ask_question above); admin use cases (D2-R1).
 
