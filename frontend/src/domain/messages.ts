@@ -89,6 +89,10 @@ export const UI = {
   clustersFrom: 'টি প্রশ্ন থেকে',
   clustersByLlm: 'নাম দিয়েছে Gemini',
   clustersByKeywords: 'নাম: প্রধান শব্দগুলো (Gemini পাওয়া যায়নি)',
+  // polish (D2-R4)
+  thinkingSlow: 'একটু বেশি সময় লাগছে, অপেক্ষা করুন…',
+  offline: 'ইন্টারনেট সংযোগ নেই। সংযোগ ফিরলে আবার চেষ্টা করুন।',
+  backOnline: 'ইন্টারনেট সংযোগ ফিরে এসেছে।',
 } as const
 
 /** Text the agent uses for a checklist field the official documents do not state. */
