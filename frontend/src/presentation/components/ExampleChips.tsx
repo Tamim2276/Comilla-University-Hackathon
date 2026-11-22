@@ -1,15 +1,19 @@
 // Example questions for the main services (FR-APP-07). Typed exactly like
 // backend/data/questions/demo_questions.txt, so they hit the pre-warmed answer cache.
 
-const EXAMPLES: { label: string; question: string }[] = [
-  { label: 'বয়স্ক ভাতা', question: 'আমার বয়স ৬৭। আমি কি বয়স্ক ভাতা পাবো? কী কী লাগবে?' },
-  { label: 'বিধবা ভাতা', question: 'বিধবা ভাতার জন্য কী লাগে?' },
-  { label: 'এনআইডি সংশোধন', question: 'NID-te namer banan bhul, ki korbo?' },
-  { label: 'জন্ম নিবন্ধন', question: 'জন্ম নিবন্ধন করতে কী কী কাগজ লাগে?' },
-  { label: 'ই-পাসপোর্ট', question: 'ই-পাসপোর্ট করতে কত টাকা লাগে?' },
-  { label: 'প্রতিবন্ধী ভাতা', question: 'প্রতিবন্ধী ভাতা পেতে কী কী কাগজ লাগে?' },
-  { label: 'জমির নামজারি', question: 'জমির নামজারি করতে কী কী লাগে?' },
-  { label: 'ট্রেড লাইসেন্স', question: 'ট্রেড লাইসেন্স করতে কী কী কাগজ লাগে?' },
+import { useLanguage } from '../../application/languageContext'
+import type { UiText } from '../../domain/messages'
+
+// The questions stay in Bangla in both languages (they must match the cache); only the labels change.
+const EXAMPLES: { label: keyof UiText; question: string }[] = [
+  { label: 'chipOldAge', question: 'আমার বয়স ৬৭। আমি কি বয়স্ক ভাতা পাবো? কী কী লাগবে?' },
+  { label: 'chipWidow', question: 'বিধবা ভাতার জন্য কী লাগে?' },
+  { label: 'chipNid', question: 'NID-te namer banan bhul, ki korbo?' },
+  { label: 'chipBirth', question: 'জন্ম নিবন্ধন করতে কী কী কাগজ লাগে?' },
+  { label: 'chipPassport', question: 'ই-পাসপোর্ট করতে কত টাকা লাগে?' },
+  { label: 'chipDisability', question: 'প্রতিবন্ধী ভাতা পেতে কী কী কাগজ লাগে?' },
+  { label: 'chipLand', question: 'জমির নামজারি করতে কী কী লাগে?' },
+  { label: 'chipTrade', question: 'ট্রেড লাইসেন্স করতে কী কী কাগজ লাগে?' },
 ]
 
 export function ExampleChips({
@@ -21,6 +25,7 @@ export function ExampleChips({
   disabled?: boolean
   title?: string
 }) {
+  const { t } = useLanguage()
   return (
     <div>
       {title && <p className="mb-2 text-base font-bold text-bd-green">{title}</p>}
@@ -34,7 +39,7 @@ export function ExampleChips({
             onClick={() => onPick(e.question)}
             className="min-h-12 shrink-0 rounded-full border-2 border-bd-green bg-white px-4 text-base font-bold text-bd-green hover:bg-bd-green-soft disabled:opacity-50"
           >
-            {e.label}
+            {t[e.label]}
           </button>
         ))}
       </div>

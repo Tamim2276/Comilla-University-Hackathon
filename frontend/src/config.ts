@@ -13,7 +13,4 @@ export const config = {
   requestTimeoutMs: 60_000,
   /** Rebuilding the question clusters embeds every question; the first run also loads the model. */
   rebuildTimeoutMs: 120_000,
-  /** Sent as X-Admin-Token on admin requests (FR-ADM-05). It is part of the built app, so it only
-   *  keeps casual visitors out of the dashboard during the demo; it is not a real login. */
-  adminToken: (import.meta.env.VITE_ADMIN_TOKEN as string | undefined) ?? '',
 } as const

@@ -19,6 +19,7 @@ class ChecklistRecord:
     sms_sent: bool
     call_sid: str | None
     created_at: datetime
+    id: str | None = None  # set by the repository; the app uses it to delete one checklist
 
 
 OTHER_SERVICE = "other"  # the router label for questions outside the 8 services
@@ -71,6 +72,11 @@ class ChecklistRepo(Protocol):
 
     def delete_for_phone(self, phone: PhoneNumber) -> int:
         """NFR-PRIV-03: removes this phone's checklists; returns how many."""
+        ...
+
+    def delete_one(self, phone: PhoneNumber, checklist_id: str) -> bool:
+        """NFR-PRIV-03: removes one checklist of this phone. False if there is none with that id
+        for this phone (another number's checklist is never touched)."""
         ...
 
 

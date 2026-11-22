@@ -2,11 +2,12 @@
 // (FR-APP-08). Shown on every page; it never blocks the screen.
 
 import { useEffect, useState } from 'react'
-import { UI } from '../../domain/messages'
+import { useLanguage } from '../../application/languageContext'
 
 const BACK_ONLINE_MS = 3_000
 
 export function OfflineBanner() {
+  const { t } = useLanguage()
   const [online, setOnline] = useState(() => navigator.onLine)
   const [justBack, setJustBack] = useState(false)
 
@@ -40,7 +41,7 @@ export function OfflineBanner() {
         online ? 'bg-bd-green text-white' : 'border-2 border-bd-red-dark bg-bd-red-soft text-bd-red-dark'
       }`}
     >
-      {online ? UI.backOnline : UI.offline}
+      {online ? t.backOnline : t.offline}
     </div>
   )
 }

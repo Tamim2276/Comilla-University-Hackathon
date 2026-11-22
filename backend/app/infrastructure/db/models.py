@@ -63,6 +63,9 @@ class MessageRow(Base):
 
 class ChecklistRow(Base):
     __tablename__ = "checklists"
+    # Never reuse a deleted id (SQLite would otherwise give the next row max(id) + 1), so a delete
+    # from a History page that was open for a while can never hit a newer checklist.
+    __table_args__ = {"sqlite_autoincrement": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     phone: Mapped[str] = mapped_column(String(16), index=True)

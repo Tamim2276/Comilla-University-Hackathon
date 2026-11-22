@@ -1,5 +1,7 @@
 // Types that mirror the API contract (SRS Section 8). No React and no fetch in this layer.
 
+import { MSG, MSG_EN, type LocalText } from './messages'
+
 export type AnswerStatus = 'answered' | 'follow_up' | 'fallback' | 'error'
 
 export type RouterName = 'banglabert' | 'tfidf' | 'llm' | 'context'
@@ -70,6 +72,8 @@ export interface HistoryMessage {
 }
 
 export interface ChecklistRecord {
+  /** Used to delete this one checklist; null only from an older server. */
+  id?: string | null
   service_id: string
   checklist: Checklist
   citations: Citation[]
@@ -132,16 +136,25 @@ export interface RebuildResult {
   labelled_by: string
 }
 
-/** A message shown in the chat on screen. */
+/** Response of POST /api/v1/admin/login. */
+export interface AdminLoginResponse {
+  token: string
+  expires_at: string
+}
+
+/** A message shown in the chat on screen. Errors keep both languages, so the language switch also
+ *  changes an error that is already on screen. */
 export type ChatMessage =
   | { id: string; role: 'user'; text: string }
   | { id: string; role: 'assistant'; answer: ChatResponse }
-  | { id: string; role: 'error'; text: string }
+  | { id: string; role: 'error'; text: LocalText }
 
 /** The error JSON every endpoint returns: {"error": {"code", "message_bn", "message_en"}}. */
 export class ApiError extends Error {
   readonly code: string
   readonly messageBn: string
+  /** The backend's English message, or '' if there is none (for example no network). */
+  readonly messageEn: string
   readonly status: number
 
   constructor(code: string, messageBn: string, status: number, messageEn = '') {
@@ -149,6 +162,15 @@ export class ApiError extends Error {
     this.name = 'ApiError'
     this.code = code
     this.messageBn = messageBn
+    this.messageEn = messageEn
     this.status = status
   }
+}
+
+/** Any error as a text in both languages. Network problems and unknown errors get the general message. */
+export function errorText(err: unknown): LocalText {
+  if (err instanceof ApiError && err.status > 0) {
+    return { bn: err.messageBn || MSG.ERROR, en: err.messageEn || MSG_EN.ERROR }
+  }
+  return { bn: err instanceof ApiError ? err.messageBn : MSG.ERROR, en: MSG_EN.ERROR }
 }
