@@ -267,6 +267,20 @@ class Container:
 
         return HandleMissedCall(self.start_callback, self.runner)
 
+    @cached_property
+    def tts(self) -> "GttsTts":  # noqa: F821
+        """FR-APP-04: Bangla speech for the app's play button (gTTS, free, no key)."""
+        from app.infrastructure.tts.gtts_tts import GttsTts
+
+        return GttsTts()
+
+    @cached_property
+    def synthesize_speech(self) -> "SynthesizeSpeech":  # noqa: F821
+        """FR-APP-04: POST /api/v1/tts, with the last answers kept in memory."""
+        from app.application.use_cases.speech import SynthesizeSpeech
+
+        return SynthesizeSpeech(self.tts)
+
     # ------------------------------------------------------------ SMS, background and admin area
     # sms + runner (D1-A4, also passed into ask_question above); admin use cases (D2-R1).
 

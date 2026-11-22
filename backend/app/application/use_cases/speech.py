@@ -1,6 +1,7 @@
-"""Use case: one spoken turn of a phone call (SRS 3.1; FR-CALL-02, 05, 06, 09, 11; FR-SMS-01).
+"""Use cases for speech: one spoken turn of a phone call, and answer audio for the app.
 
-Decides what the caller hears next. Framework-free: the voice router turns a VoiceReply into TwiML.
+HandleVoiceTurn (SRS 3.1; FR-CALL-02, 05, 06, 09, 11; FR-SMS-01) decides what the caller hears next.
+Framework-free: the voice router turns a VoiceReply into TwiML.
 
 Rules, in order:
 1. A goodbye phrase ends the call, unless a follow-up question is pending (then a short
@@ -8,15 +9,20 @@ Rules, in order:
 2. Otherwise the text goes to AskQuestion with channel=voice.
 3. The last allowed turn (MAX_TURNS_PER_CALL) gets its answer, then GOODBYE.
 4. Any failure speaks ERROR and keeps the call alive.
+
+SynthesizeSpeech (FR-APP-04) turns an answer into MP3 for the app's play button.
 """
 
 import logging
+import threading
 import time
 import unicodedata
+from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
 
 from app.application.dto import AskResult
+from app.application.ports.messaging import TextToSpeech
 from app.application.ports.repositories import CallRepo, ConversationRepo
 from app.domain import messages_bn
 from app.domain.entities import Answer
@@ -130,12 +136,44 @@ def _strip_punctuation(text: str) -> str:
 
 
 def _sms_scheduled(result: AskResult) -> bool:
-    """True when AskQuestion queued the SMS checklist on this turn (FR-SMS-01).
-
-    Reads AskResult.sms_scheduled; until AskQuestion reports it, the call does not claim an SMS.
-    """
-    return bool(getattr(result, "sms_scheduled", False))
+    """True when AskQuestion queued the SMS checklist on this turn (FR-SMS-01)."""
+    return result.sms_scheduled
 
 
 def _without_continue(texts: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(t for t in texts if t != messages_bn.CONTINUE)
+
+
+# ---------------------------------------------------------------- answer audio for the app (FR-APP-04)
+
+TTS_CACHE_SIZE = 64  # the same answers are played again and again (and cached answers repeat)
+
+
+class SynthesizeSpeech:
+    """Bangla MP3 for an answer's speech_text (POST /api/v1/tts).
+
+    Keeps the last TTS_CACHE_SIZE results in memory, so playing an answer again is instant and
+    does not call the speech service twice. Errors from the adapter (TtsFailed) pass through.
+    """
+
+    def __init__(self, tts: TextToSpeech, cache_size: int = TTS_CACHE_SIZE) -> None:
+        self._tts = tts
+        self._cache_size = cache_size
+        self._cache: OrderedDict[str, bytes] = OrderedDict()
+        self._lock = threading.Lock()
+
+    def execute(self, text: str) -> bytes:
+        key = " ".join(text.split())
+        with self._lock:
+            if key in self._cache:
+                self._cache.move_to_end(key)
+                return self._cache[key]
+        started = time.perf_counter()
+        audio = self._tts.synthesize(key)
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        log.info("tts chars=%d bytes=%d ms=%.0f", len(key), len(audio), elapsed_ms)
+        with self._lock:
+            self._cache[key] = audio
+            while len(self._cache) > self._cache_size:
+                self._cache.popitem(last=False)
+        return audio
