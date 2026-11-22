@@ -97,6 +97,13 @@ def _result_url(cfg: VoiceConfig, job_id: str) -> str:
     return f"{cfg.result_url}?job={job_id}"
 
 
+def reject_busy() -> str:
+    """FR-CALL-08: <Reject> as the only verb, so Twilio never answers and nobody is charged."""
+    response = VoiceResponse()
+    response.reject(reason="busy")
+    return str(response)
+
+
 def say_and_hang_up(cfg: VoiceConfig, *texts: str) -> str:
     response = VoiceResponse()
     for text in texts:

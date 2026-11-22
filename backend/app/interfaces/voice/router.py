@@ -14,14 +14,18 @@ from fastapi import APIRouter, Depends, Form, Query, Request, Response
 
 from app.application.use_cases.handle_call_end import HandleCallEnd, RecordCallStart
 from app.application.use_cases.speech import VoiceReply
+from app.application.use_cases.start_callback import HandleMissedCall
 from app.application.use_cases.voice_jobs import Pending, VoiceAnswers
 from app.interfaces.api.deps import get_container
 from app.interfaces.voice import twiml
 from app.interfaces.voice.call_state import SilenceCounter
+from app.interfaces.voice.security import verify_twilio_signature
 
 log = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/voice", tags=["voice"])
+router = APIRouter(
+    prefix="/voice", tags=["voice"], dependencies=[Depends(verify_twilio_signature)]  # FR-CALL-12
+)
 
 TWIML_MEDIA_TYPE = "application/xml"
 MAX_SILENCES = 2  # SRS 3.1: REPROMPT once, GOODBYE on the second silence
@@ -46,6 +50,14 @@ def get_record_call_start(request: Request) -> RecordCallStart:
 
 def get_handle_call_end(request: Request) -> HandleCallEnd:
     return get_container(request).handle_call_end
+
+
+def get_missed_call_mode(request: Request) -> bool:
+    return get_container(request).settings.missed_call_mode
+
+
+def get_handle_missed_call(request: Request) -> HandleMissedCall:
+    return get_container(request).handle_missed_call
 
 
 def citizen_number(from_: str, to: str, direction: str) -> str:
@@ -78,6 +90,7 @@ def _greet(
 
 @router.post("/incoming", response_class=Response)
 def incoming(
+    request: Request,
     cfg: Config,
     record: Annotated[RecordCallStart, Depends(get_record_call_start)],
     call_sid: CallSid = "",
@@ -85,7 +98,14 @@ def incoming(
     to: To = "",
     direction: Direction = "inbound",
 ) -> Response:
-    """FR-CALL-01: a citizen called the Twilio number."""
+    """FR-CALL-01: a citizen called the Twilio number. FR-CALL-08: missed-call mode rejects, calls back."""
+    if get_missed_call_mode(request):
+        try:
+            get_handle_missed_call(request).execute(from_)
+        except Exception:
+            log.exception("could not schedule the call-back call_sid=%s", call_sid)
+        log.info("missed call rejected call_sid=%s", call_sid)
+        return _twiml(twiml.reject_busy())
     return _greet(cfg, record, call_sid, citizen_number(from_, to, direction), direction)
 
 
