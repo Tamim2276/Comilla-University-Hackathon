@@ -239,6 +239,7 @@ def verify(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
             state.get("passages") or [],
             display=_text(draft.get("display_text")),
             checklist=checklist,
+            question=state.get("question", ""),
         ),
         prompts.VERIFY_SCHEMA,
         role=ModelRole.MAIN,
@@ -261,8 +262,12 @@ def verify(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     display_ok = bool(data.get("display_supported", True))
     if bad_fields or not display_ok:
         log.info("verify: checklist fields unsupported %s, screen text supported %s", bad_fields, display_ok)
+    answers = bool(data.get("answers_question", True))
+    if not answers:
+        log.info("verify: the answer is about another question than the one asked")
     return {
         "verified_claims": checked,
+        "answers_question": answers,
         "speech_supported": bool(data.get("speech_supported", True)),
         "display_supported": display_ok,
         "unsupported_checklist": bad_fields,

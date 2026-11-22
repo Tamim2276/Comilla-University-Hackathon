@@ -249,6 +249,8 @@ such as "contact the office" or "the office decides" count as supported.
 Passages:
 {passages}
 
+Citizen's question: {question}
+
 Claims:
 {claims}
 
@@ -264,7 +266,10 @@ Return JSON: `claims` = one item per claim with its `index` and `supported` (tru
 `display_supported` = false if the screen text states any fact the passages do not support;
 `unsupported_checklist` = the checklist fields (who, papers, fee, where, decision) that state a
 fact the passages do not support. "তথ্য পাওয়া যায়নি" (not found) is always supported. A fee such
-as "বিনামূল্যে" (free) is supported only if a passage says so."""
+as "বিনামূল্যে" (free) is supported only if a passage says so.
+`answers_question` = true only if the spoken answer gives what the citizen asked for. It is false
+when it answers a different question on the same topic (for example the citizen asks what to do
+when a court case happens and the answer only says how to find out whether a case exists)."""
 
 VERIFY_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -279,12 +284,15 @@ VERIFY_SCHEMA: dict[str, Any] = {
         },
         "speech_supported": {"type": "boolean"},
         "display_supported": {"type": "boolean"},
+        "answers_question": {"type": "boolean"},
         "unsupported_checklist": {
             "type": "array",
             "items": {"type": "string", "enum": ["who", "papers", "fee", "where", "decision"]},
         },
     },
-    "required": ["claims", "speech_supported", "display_supported", "unsupported_checklist"],
+    "required": [
+        "claims", "speech_supported", "display_supported", "answers_question", "unsupported_checklist"
+    ],
 }
 
 
@@ -307,10 +315,12 @@ def build_verify_prompt(
     passages: Sequence[Passage],
     display: str = "",
     checklist: Mapping[str, Any] | None = None,
+    question: str = "",
 ) -> str:
     numbered = "\n".join(f"{i}. {text}" for i, text in enumerate(claims)) or "(none)"
     return VERIFY_PROMPT.format(
         passages=format_passages(passages),
+        question=question or "(unknown)",
         claims=numbered,
         speech=speech,
         display=display or "(none)",

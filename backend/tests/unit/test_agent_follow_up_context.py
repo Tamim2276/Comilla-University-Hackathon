@@ -64,3 +64,10 @@ def test_end_to_end_the_follow_up_stays_on_widow_allowance() -> None:
     assert answer.service_id == "widow_allowance" and answer.router_source is RouterSource.LLM
     assert llm.steps[0] == "classify" and answer.status is AnswerStatus.ANSWERED
     assert d.retriever.searches[0][0] == standalone  # type: ignore[attr-defined]
+
+
+def test_an_answer_to_another_question_is_not_given_even_when_its_facts_are_supported() -> None:
+    claims = [{"supported": True, "core": True}]
+    state: AgentState = {"answers_question": False, "verified_claims": claims, "speech_supported": True}
+    assert routing.after_verify(state, 2) == routing.FALLBACK
+    assert routing.after_verify({**state, "answers_question": True}, 2) == routing.FINALIZE

@@ -39,6 +39,7 @@ class AgentState(TypedDict, total=False):
     draft: dict[str, Any]  # the generate step's JSON
     verified_claims: list[dict[str, Any]]  # draft claims, each with `supported` added by verify
     speech_supported: bool
+    answers_question: bool  # the verifier found the answer is about the question that was asked
     display_supported: bool  # the screen text has no unsupported fact
     unsupported_checklist: list[str]  # checklist fields to blank out ("who", "papers", "fee", ...)
     answer: Answer

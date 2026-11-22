@@ -71,6 +71,8 @@ def after_generate(state: AgentState, max_retries: int) -> str:
 
 def after_verify(state: AgentState, max_retries: int) -> str:
     """All core claims and the spoken answer supported -> finalize; else retry, then fall back (FR-AGT-10)."""
+    if state.get("answers_question") is False:
+        return FALLBACK  # true facts, but for another question: a retry would not change that
     claims = state.get("verified_claims") or []
     supported = [c for c in claims if c.get("supported")]
     core_failed = any(c.get("core") and not c.get("supported") for c in claims)
