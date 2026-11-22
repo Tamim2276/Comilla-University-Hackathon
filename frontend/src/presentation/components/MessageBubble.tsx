@@ -1,17 +1,19 @@
 // One message in the chat: the user's question, an answer from Ek Call, or an error (FR-APP-02, 08).
-// The checklist card and the source list are added in D1-R5.
+// An answer shows (SRS 3.3): service tag, the spoken-style answer, the checklist card, the sources.
 
+import { useEffect, useState } from 'react'
 import { UI } from '../../domain/messages'
 import type { ChatMessage, ChatResponse } from '../../domain/types'
+import { ChecklistCard } from './ChecklistCard'
 import { RichText } from './RichText'
+import { ServiceTag } from './ServiceTag'
+import { SourceList } from './SourceList'
 import { PlayAnswerButton } from './voice/PlayAnswerButton'
 
-function ServiceTag({ name }: { name: string }) {
-  return (
-    <span className="inline-block rounded-full bg-bd-green-soft px-3 py-1 text-sm font-bold text-bd-green">
-      {name}
-    </span>
-  )
+/** The first non-empty line of display_text if it is a bold title ("**বয়স্ক ভাতা** ..."), else "". */
+function titleLine(displayText: string): string {
+  const first = displayText.split('\n').find((line) => line.trim()) ?? ''
+  return first.trim().startsWith('**') ? first : ''
 }
 
 function AnswerBubble({ answer }: { answer: ChatResponse }) {
@@ -37,10 +39,29 @@ function AnswerBubble({ answer }: { answer: ChatResponse }) {
         {answer.service && !isFallback && <ServiceTag name={answer.service.name_bn} />}
         {isFallback && <span className="text-sm font-bold text-gray-600">{UI.fallbackLabel}</span>}
       </div>
-      <RichText text={answer.display_text || answer.speech_text} />
+      {answer.checklist ? (
+        // The checklist card already lists the details, so only the title line of display_text
+        // (it also carries the stub's "sample answer" label) and the short spoken answer go on top.
+        <>
+          {titleLine(answer.display_text) && <RichText text={titleLine(answer.display_text)} />}
+          <p className="text-lg leading-relaxed break-words">{answer.speech_text}</p>
+        </>
+      ) : (
+        <RichText text={answer.display_text || answer.speech_text} />
+      )}
       <div className="mt-2">
         <PlayAnswerButton text={answer.speech_text} />
       </div>
+      {answer.checklist && (
+        <div className="mt-3">
+          <ChecklistCard checklist={answer.checklist} />
+        </div>
+      )}
+      {answer.citations.length > 0 && (
+        <div className="mt-3">
+          <SourceList citations={answer.citations} />
+        </div>
+      )}
     </div>
   )
 }
@@ -76,7 +97,16 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
   )
 }
 
+/** After this long, the thinking bubble says the answer is taking longer (Gemini can be slow). */
+const SLOW_AFTER_MS = 8_000
+
 export function ThinkingBubble() {
+  const [slow, setSlow] = useState(false)
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSlow(true), SLOW_AFTER_MS)
+    return () => window.clearTimeout(timer)
+  }, [])
+
   return (
     <div className="flex justify-start" role="status" aria-live="polite">
       <div className="flex items-center gap-3 rounded-2xl rounded-tl-sm bg-white px-4 py-3 shadow-sm">
@@ -85,7 +115,7 @@ export function ThinkingBubble() {
           <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-bd-green [animation-delay:-0.15s]" />
           <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-bd-red" />
         </span>
-        <span className="text-gray-600">{UI.thinking}</span>
+        <span className="text-gray-600">{slow ? UI.thinkingSlow : UI.thinking}</span>
       </div>
     </div>
   )

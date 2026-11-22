@@ -2,7 +2,7 @@
 // The three components in ./components/voice/ belong to Ragib; this page only places them.
 
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { MAX_QUESTION_LENGTH, useChat } from '../../application/useChat'
 import type { Session } from '../../application/useSession'
 import { UI } from '../../domain/messages'
@@ -56,7 +56,16 @@ export function ChatPage({ session, phone }: { session: Session; phone: string }
       />
 
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-3 px-4 py-4">
-        <CallMeButton phone={phone} />
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to="/history"
+            className="flex min-h-12 items-center rounded-xl border-2 border-bd-green bg-white px-4 font-bold text-bd-green hover:bg-bd-green-soft"
+          >
+            {UI.history}
+            <span className="ml-2 text-sm font-normal text-gray-600">{UI.historyEn}</span>
+          </Link>
+          <CallMeButton phone={phone} />
+        </div>
 
         {messages.length === 0 && !loading && (
           <p className="rounded-2xl bg-white p-4 text-center text-gray-700 shadow-sm">{UI.emptyChat}</p>

@@ -3,13 +3,14 @@
 import dataclasses
 import hashlib
 import uuid
+from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
 from app.application.ports.clustering import Cluster
 from app.application.ports.llm import ModelRole
-from app.application.ports.repositories import ChecklistRecord
+from app.application.ports.repositories import OTHER_SERVICE, ChecklistRecord, QuestionStats
 from app.application.ports.retrieval import Passage
 from app.domain.entities import Answer, Checklist, Citation, Message, QuestionLog
 from app.domain.errors import LLMUnavailable, NotFound
@@ -222,7 +223,7 @@ class InMemoryQuestionLogRepo:
         self.logs: dict[int, QuestionLog] = {}
 
     def add(self, log: QuestionLog) -> None:
-        self.logs[len(self.logs) + 1] = log
+        self.logs[max(self.logs, default=0) + 1] = log  # like an autoincrement id: never reused
 
     def list_recent(self, status: AnswerStatus | None, limit: int) -> list[QuestionLog]:
         # Newest first; equal times -> the one added later first (same as the SQL repo).
@@ -236,6 +237,23 @@ class InMemoryQuestionLogRepo:
     def set_cluster_ids(self, assignments: Mapping[int, int]) -> None:
         for log_id, cluster_id in assignments.items():
             self.logs[log_id] = dataclasses.replace(self.logs[log_id], cluster_id=cluster_id)
+
+    def stats(self) -> QuestionStats:
+        logs = list(self.logs.values())
+        replied = [log.latency_ms for log in logs if log.status is not AnswerStatus.ERROR]
+        return QuestionStats(
+            total=len(logs),
+            by_status=dict(Counter(log.status.value for log in logs)),
+            by_service=dict(Counter(log.service_id or OTHER_SERVICE for log in logs)),
+            by_channel=dict(Counter(log.channel.value for log in logs)),
+            avg_latency_ms=sum(replied) / len(replied) if replied else 0.0,
+        )
+
+    def delete_demo(self) -> int:
+        demo = [log_id for log_id, log in self.logs.items() if log.is_demo]
+        for log_id in demo:
+            del self.logs[log_id]
+        return len(demo)
 
 
 class InMemoryCallRepo:

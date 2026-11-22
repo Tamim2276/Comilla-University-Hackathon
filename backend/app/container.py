@@ -28,6 +28,7 @@ from app.application.ports.repositories import (
     ConversationRepo,
     QuestionLogRepo,
 )
+from app.application.use_cases.admin import GetAdminStats, ListQuestions
 from app.application.use_cases.ask_question import AskQuestion
 from app.application.use_cases.clusters import ListClusters, RebuildClusters
 from app.application.use_cases.history import DeleteHistory, GetHistory
@@ -208,8 +209,43 @@ class Container:
     # Planned here: call_placer (Twilio), tts (gTTS), start_callback, handle_call_end, synthesize_speech
     # (steps D1-A3, D1-A5, D2-A1, D2-R2, D2-A2).
 
+    @cached_property
+    def silence_counter(self) -> "SilenceCounter":  # noqa: F821 (imported below to keep this area self-contained)
+        """FR-CALL-04: empty speech results in a row, per CallSid (one per app)."""
+        from app.interfaces.voice.call_state import SilenceCounter
+
+        return SilenceCounter()
+
+    @cached_property
+    def handle_voice_turn(self) -> "HandleVoiceTurn":  # noqa: F821 (imported below, see silence_counter)
+        """FR-CALL-02, 05, 06, 09: one spoken turn, answered by the same AskQuestion as the app."""
+        from app.application.use_cases.speech import HandleVoiceTurn
+
+        return HandleVoiceTurn(self.ask_question.execute, self.calls, self.conversations)
+
+    @cached_property
+    def record_call_start(self) -> "RecordCallStart":  # noqa: F821
+        """FR-CALL-11: the calls row for /voice/incoming and /voice/start."""
+        from app.application.use_cases.handle_call_end import RecordCallStart
+
+        return RecordCallStart(self.calls)
+
+    @cached_property
+    def handle_call_end(self) -> "HandleCallEnd":  # noqa: F821
+        """FR-CALL-11: end time from the Twilio status callback."""
+        from app.application.use_cases.handle_call_end import HandleCallEnd
+
+        return HandleCallEnd(self.calls)
+
+    @cached_property
+    def voice_answers(self) -> "VoiceAnswers":  # noqa: F821
+        """FR-CALL-10: turns run in the background; slow answers come through /voice/result."""
+        from app.application.use_cases.voice_jobs import VoiceAnswers
+
+        return VoiceAnswers(self.handle_voice_turn.execute, self.runner)
+
     # ------------------------------------------------------------ SMS, background and admin area
-    # sms + runner (D1-A4, also passed into ask_question above); admin use cases come in D2-R1.
+    # sms + runner (D1-A4, also passed into ask_question above); admin use cases (D2-R1).
 
     @cached_property
     def sms(self) -> SmsSender:
@@ -223,6 +259,16 @@ class Container:
     def runner(self) -> BackgroundRunner:
         """Background work: SMS (D1-A4), call-back (D2-A1) and async voice answers (D2-A2)."""
         return ThreadPoolRunner(max_workers=4)
+
+    @cached_property
+    def get_admin_stats(self) -> GetAdminStats:
+        """FR-ADM-01: dashboard KPIs, per service and per channel, calls today."""
+        return GetAdminStats(self.question_logs, self.calls, self.services)
+
+    @cached_property
+    def list_questions(self) -> ListQuestions:
+        """FR-ADM-02: newest questions, e.g. only the unanswered (fallback) ones."""
+        return ListQuestions(self.question_logs, self.services)
 
     # ------------------------------------------------------------ AI area
     # Planned here: classifier (tfidf | banglabert | llm), the LangGraph engine (replaces answer_engine
