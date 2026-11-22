@@ -487,3 +487,15 @@ def test_llm_classifier_returns_all_labels_sorted() -> None:
 def test_classify_prompt_lists_every_label() -> None:
     prompt = prompts.build_classify_prompt("প্রশ্ন", SERVICES)
     assert all(f"- {sid}:" in prompt for sid in SERVICES)
+
+
+def test_finalize_cuts_a_phone_answer_to_three_sentences_but_not_an_app_answer() -> None:
+    long_speech = "এক। দুই। তিন। চার। পাঁচ।"
+    draft = {**GOOD_DRAFT, "speech_text": long_speech}
+    base: AgentState = {"draft": draft, "service_id": "old_age_allowance", "confidence": 0.95,
+                        "router_source": RouterSource.TFIDF, "passages": PASSAGES, "verified_claims": [],
+                        "speech_supported": True}  # fmt: skip
+    voice = steps.finalize({**base, "channel": Channel.VOICE}, deps())
+    app = steps.finalize({**base, "channel": Channel.APP}, deps())
+    assert voice["answer"].speech_text == "এক। দুই। তিন।"
+    assert app["answer"].speech_text == long_speech

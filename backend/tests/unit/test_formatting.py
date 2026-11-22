@@ -1,4 +1,4 @@
-from app.application.formatting import ELLIPSIS, format_sms, trim_speech
+from app.application.formatting import ELLIPSIS, format_sms, limit_sentences, trim_speech
 from app.domain.entities import Checklist, Service
 
 SERVICE = Service(
@@ -86,3 +86,10 @@ def test_long_speech_without_early_sentence_end_is_cut_at_the_limit() -> None:
 
 def test_extra_spaces_are_collapsed() -> None:
     assert trim_speech("  আবেদন   বিনামূল্যে।  ") == "আবেদন বিনামূল্যে।"
+
+
+def test_limit_sentences_keeps_the_first_three_and_leaves_short_text_alone() -> None:
+    five = "এক। দুই। তিন। চার। পাঁচ।"
+    assert limit_sentences(five) == "এক। দুই। তিন।"
+    assert limit_sentences("এক। দুই?") == "এক। দুই?"
+    assert limit_sentences("কোনো দাঁড়ি নেই") == "কোনো দাঁড়ি নেই"

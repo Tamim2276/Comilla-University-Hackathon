@@ -17,6 +17,7 @@ MAX_RETRIEVAL_RETRIES: Final = 2
 
 # Answer shape (FR-AGT-08, FR-CALL-03, SRS 3.2)
 MAX_SPEECH_WORDS: Final = 45
+MAX_VOICE_SENTENCES: Final = 3  # a phone answer is cut after this many sentences (the SMS carries the rest)
 MAX_SMS_CHARS: Final = 300
 HISTORY_TURNS_FOR_PROMPT: Final = 3
 HISTORY_MESSAGES_TO_LOAD: Final = 6

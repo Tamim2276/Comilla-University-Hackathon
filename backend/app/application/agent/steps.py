@@ -13,7 +13,7 @@ from app.application.agent import prompts
 from app.application.agent.cache_key import cache_key
 from app.application.agent.routing import OTHER
 from app.application.agent.state import AgentState
-from app.application.formatting import trim_speech
+from app.application.formatting import limit_sentences, trim_speech
 from app.application.ports.classifier import ServiceClassifier
 from app.application.ports.llm import LLM, ModelRole
 from app.application.ports.repositories import AnswerCache
@@ -305,7 +305,10 @@ def finalize(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     """
     draft = state["draft"]
     service = deps.services[state["service_id"]]
-    speech = to_bangla_digits(trim_speech(_text(draft.get("speech_text"))))
+    speech = trim_speech(_text(draft.get("speech_text")))
+    if state.get("channel") is Channel.VOICE:
+        speech = limit_sentences(speech)
+    speech = to_bangla_digits(speech)
     display = _text(draft.get("display_text")) if state.get("display_supported", True) else ""
     display = display or speech
     if DECISION_NOTE not in display:

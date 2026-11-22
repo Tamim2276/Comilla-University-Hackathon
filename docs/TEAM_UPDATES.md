@@ -57,6 +57,9 @@ Do these steps first. The numbered entries below (newest first, 15 down to 1) ex
 **What changed**
 - Ragib's test report (issue 3): "NID-te namer banan bhul, ki korbo?" gave "ফি: তথ্য পাওয়া যায়নি" although the NID fee table is in our documents. The search for a spelling question did not rank the fee table high enough.
 - The agent now runs one more local search for the service's fee passages (no extra AI call, a few milliseconds) and keeps them for the checklist. Now the same question shows "১ম বার: ফি ২০০ টাকা, ভ্যাট ৩০ টাকা; ২য় বার: ... " and the e-passport card names the fee rule.
+- Phone answers are now cut after 3 sentences (the SMS and the checklist carry the rest). The app text is not cut. Ragib: the S1 spoken answer was 5 sentences; it is now 3.
+- Widow allowance "where" now says "ইউনিয়ন সমাজকর্মীর কাছে" instead of "ইউনিয়ন সমাজকর্মীর ডিভাইস".
+- NID "decision" still shows "চূড়ান্ত সিদ্ধান্ত সংশ্লিষ্ট অফিস নেবে।": no NID document says who decides, so the general note is the honest answer.
 - Old age and widow allowance still say "তথ্য পাওয়া যায়নি" for the fee. That is correct: no official document we have states a fee. The SRS scenario S1 now says so.
 
 **You need to**

@@ -1,7 +1,7 @@
 """Pure text helpers: the SMS checklist (SRS 3.2) and the spoken-answer length limit (FR-AGT-08)."""
 
 from app.domain.entities import Checklist, Service
-from app.domain.policies import MAX_SMS_CHARS, MAX_SPEECH_WORDS
+from app.domain.policies import MAX_SMS_CHARS, MAX_SPEECH_WORDS, MAX_VOICE_SENTENCES
 
 ELLIPSIS = "…"
 _SENTENCE_ENDS = ("।", "?", "!", ".")
@@ -73,3 +73,15 @@ def trim_speech(text: str, max_words: int = MAX_SPEECH_WORDS) -> str:
                 return " ".join(kept[: i + 1])
             break
     return " ".join(kept).rstrip(_TRAILING_PUNCT) + "।"
+
+
+def limit_sentences(text: str, max_sentences: int = MAX_VOICE_SENTENCES) -> str:
+    """Keeps the first `max_sentences` sentences: a long phone answer is hard to follow."""
+    words = text.split()
+    sentences = 0
+    for i, word in enumerate(words):
+        if word.endswith(_SENTENCE_ENDS):
+            sentences += 1
+            if sentences == max_sentences:
+                return " ".join(words[: i + 1])
+    return " ".join(words)

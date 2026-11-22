@@ -116,6 +116,9 @@ Rules:
 5. display_text: Bangla markdown for a screen: a bold title line, then short bullet points.
 6. checklist: who (who can apply), papers (list of documents), fee, where (office or website),
    decision. Use only facts from the passages; write "তথ্য পাওয়া যায়নি" for an unknown field.
+   In `where`, name the person or office to go to in plain words a villager understands: write
+   the person instead of his equipment ("ইউনিয়ন সমাজকর্মীর ডিভাইস" -> "ইউনিয়ন সমাজকর্মীর কাছে"),
+   and keep every office or website the passage names.
 7. claims: every fact you state, each with the passage_ids that support it (for example ["P1"])
    and core = true when the answer is wrong without it.
 8. follow_up_question: almost always EMPTY. Conditions the citizen did not mention (gender,
@@ -126,7 +129,10 @@ Rules:
 9. Output JSON only, matching the schema exactly."""
 
 # The call adds the SMS sentence itself, only when an SMS is really queued (speech.py, FR-SMS-01).
-_VOICE_RULE = "It is spoken on a phone call: short sentences, no lists. Do not mention SMS."
+_VOICE_RULE = (
+    "It is spoken on a phone call: at most 3 short sentences, no lists, the most important fact "
+    "first. Do not mention SMS."
+)
 _APP_RULE = "The citizen reads the answer on a screen."
 
 GENERATE_SCHEMA: dict[str, Any] = {
