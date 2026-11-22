@@ -1,6 +1,7 @@
 // One message in the chat: the user's question, an answer from Ek Call, or an error (FR-APP-02, 08).
 // An answer shows (SRS 3.3): service tag, the spoken-style answer, the checklist card, the sources.
 
+import { useEffect, useState } from 'react'
 import { UI } from '../../domain/messages'
 import type { ChatMessage, ChatResponse } from '../../domain/types'
 import { ChecklistCard } from './ChecklistCard'
@@ -96,7 +97,16 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
   )
 }
 
+/** After this long, the thinking bubble says the answer is taking longer (Gemini can be slow). */
+const SLOW_AFTER_MS = 8_000
+
 export function ThinkingBubble() {
+  const [slow, setSlow] = useState(false)
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSlow(true), SLOW_AFTER_MS)
+    return () => window.clearTimeout(timer)
+  }, [])
+
   return (
     <div className="flex justify-start" role="status" aria-live="polite">
       <div className="flex items-center gap-3 rounded-2xl rounded-tl-sm bg-white px-4 py-3 shadow-sm">
@@ -105,7 +115,7 @@ export function ThinkingBubble() {
           <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-bd-green [animation-delay:-0.15s]" />
           <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-bd-red" />
         </span>
-        <span className="text-gray-600">{UI.thinking}</span>
+        <span className="text-gray-600">{slow ? UI.thinkingSlow : UI.thinking}</span>
       </div>
     </div>
   )
