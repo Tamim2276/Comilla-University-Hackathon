@@ -252,7 +252,41 @@ def test_retrieve_searches_the_chosen_service() -> None:
     d = deps()
     out = steps.retrieve({"question": "q", "query": "rewritten", "service_id": "old_age_allowance"}, d)
     assert len(out["passages"]) == 3
-    assert d.retriever.searches == [("rewritten", "old_age_allowance", 5)]  # type: ignore[attr-defined]
+    assert d.retriever.searches == [  # type: ignore[attr-defined]
+        ("rewritten", "old_age_allowance", 5),
+        ("বয়স্ক ভাতা ফি কত টাকা", "old_age_allowance", 2),  # the fee passages, see the next test
+    ]
+
+
+class FeeRetriever:
+    """The topic search finds no fee table; the fee search does."""
+
+    def __init__(self, topic: list[Passage], fees: list[Passage]) -> None:
+        self.topic, self.fees = topic, fees
+
+    def search(self, query: str, service_id: str | None, k: int) -> list[Passage]:
+        return list(self.fees if query.endswith("ফি কত টাকা") else self.topic)[:k]
+
+
+def test_retrieve_adds_the_fee_passage_that_states_an_amount_without_duplicates() -> None:
+    topic = [dataclasses.replace(PASSAGES[0], chunk_id="t-1", text="নাম সংশোধন করতে ফরম লাগে")]
+    fee = dataclasses.replace(PASSAGES[1], chunk_id="t-fee", text="১ম বার: ফি ২০০ টাকা")
+    no_amount = dataclasses.replace(PASSAGES[2], chunk_id="t-other", text="অফিসে যোগাযোগ করুন")
+    d = dataclasses.replace(deps(), retriever=FeeRetriever(topic, [topic[0], fee, no_amount]))
+    out = steps.retrieve({"question": "q", "service_id": "old_age_allowance"}, d)
+    assert [p.chunk_id for p in out["passages"]] == ["t-1", "t-fee"] and out["fee_ids"] == ["t-fee"]
+
+
+def test_grade_keeps_the_fee_passages_while_something_else_is_relevant() -> None:
+    passages = [
+        dataclasses.replace(PASSAGES[0], chunk_id="t-1"),
+        dataclasses.replace(PASSAGES[1], chunk_id="t-fee"),
+    ]
+    state: AgentState = {"question": "q", "passages": passages, "fee_ids": ["t-fee"]}
+    out = steps.grade(state, deps(llm=FakeLLM([{"relevant_ids": ["P1"]}])))
+    assert [p.chunk_id for p in out["passages"]] == ["t-1", "t-fee"]
+    nothing = steps.grade(state, deps(llm=FakeLLM([{"relevant_ids": []}])))
+    assert nothing["relevant_ids"] == []  # a fee passage alone is not an answer: the query is rewritten
 
 
 def test_grade_keeps_only_relevant_passages_and_renumbers_them() -> None:  # FR-AGT-06
@@ -376,7 +410,7 @@ def test_empty_grade_rewrites_and_retries_then_answers() -> None:
     answer = LangGraphAnswerEngine(d).answer("ভাতা কবে পাবো?", [], Channel.APP)
     assert answer.status is AnswerStatus.ANSWERED
     assert llm.steps == ["grade", "rewrite", "grade", "generate", "verify"]
-    queries = [q for q, _, _ in d.retriever.searches]  # type: ignore[attr-defined]
+    queries = [q for q, _, _ in d.retriever.searches if not q.endswith("ফি কত টাকা")]  # type: ignore[attr-defined]
     assert queries == ["ভাতা কবে পাবো?", "বয়স্ক ভাতার যোগ্যতা"]
 
 

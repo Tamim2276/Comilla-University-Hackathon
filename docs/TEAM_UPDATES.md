@@ -8,7 +8,7 @@ Nothing secret belongs in this file. Keys and Twilio values are shared privately
 
 ## Start here: everything to do once, in order (Ragib and Ariful)
 
-Do these steps first. The numbered entries below (newest first, 14 down to 1) explain what changed and why; read them from the top until you reach one you already read.
+Do these steps first. The numbered entries below (newest first, 15 down to 1) explain what changed and why; read them from the top until you reach one you already read.
 
 **1. Get the latest code**
 - `git checkout main`, then `git pull origin main`.
@@ -49,6 +49,23 @@ Do these steps first. The numbered entries below (newest first, 14 down to 1) ex
 
 **Later**
 - Later, deployment: Ariful puts the app on Vercel (set `VITE_API_URL` to the backend address Tamim gives you); the backend runs on the demo laptop with ngrok. Details when the time comes.
+
+---
+
+## 15. The checklist fee is filled even when the question is not about money, 22 Nov
+
+**What changed**
+- Ragib's test report (issue 3): "NID-te namer banan bhul, ki korbo?" gave "ফি: তথ্য পাওয়া যায়নি" although the NID fee table is in our documents. The search for a spelling question did not rank the fee table high enough.
+- The agent now runs one more local search for the service's fee passages (no extra AI call, a few milliseconds) and keeps them for the checklist. Now the same question shows "১ম বার: ফি ২০০ টাকা, ভ্যাট ৩০ টাকা; ২য় বার: ... " and the e-passport card names the fee rule.
+- Old age and widow allowance still say "তথ্য পাওয়া যায়নি" for the fee. That is correct: no official document we have states a fee. The SRS scenario S1 now says so.
+
+**You need to**
+1. Pull `main`, merge it into your branch, restart the backend.
+2. Run `python -m scripts.ingest` once (it clears cached answers, which still have the old empty fee).
+
+**Good to know**
+- Ariful: the fee line can be longer now (three tiers for NID). Please check that it wraps on the card and in the SMS (300 characters).
+- Ragib: re-run S4 (Banglish NID) in your app flow test; the fee should no longer be missing.
 
 ---
 

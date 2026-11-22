@@ -27,6 +27,9 @@ from app.domain.value_objects import AnswerStatus, Channel, Role, RouterSource
 log = logging.getLogger(__name__)
 
 SNIPPET_WORDS = 30
+FEE_QUERY = "ফি কত টাকা"
+FEE_PASSAGES = 2  # fee passages added next to the top-k, see _with_fee_passages
+AMOUNT_WORD = "টাকা"
 SHORT_QUESTION_WORDS = 6  # a question this short, after an answer, may only make sense with the conversation
 UNKNOWN_BN = "তথ্য পাওয়া যায়নি"
 _BANGLA_DIGITS = str.maketrans("0123456789", "০১২৩৪৫৬৭৮৯")
@@ -171,8 +174,23 @@ def cache_lookup(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
 def retrieve(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     """Top-k official passages for the chosen service (FR-AGT-05; the merge fallback is in the adapter)."""
     query = state.get("query") or state["question"]
-    passages = deps.retriever.search(query, state["service_id"], deps.top_k)
-    return {"query": query, "passages": passages}
+    service_id = state["service_id"]
+    passages = deps.retriever.search(query, service_id, deps.top_k)
+    fees = _fee_passages(service_id, deps)
+    have = {p.chunk_id for p in passages}
+    extra = [p for p in fees if p.chunk_id not in have]
+    return {"query": query, "passages": [*passages, *extra], "fee_ids": [p.chunk_id for p in fees]}
+
+
+def _fee_passages(service_id: str, deps: AgentDeps) -> list[Passage]:
+    """The service's fee passages, so the checklist fee is filled even when the question is not
+    about money ("how do I correct my name" still needs the fee table). `grade` keeps them.
+
+    One more local search (no LLM call). Only passages that state an amount are kept.
+    """
+    fee_query = f"{deps.services[service_id].name_bn} {FEE_QUERY}"
+    found = deps.retriever.search(fee_query, service_id, FEE_PASSAGES)
+    return [p for p in found if AMOUNT_WORD in p.text]
 
 
 def generate(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
@@ -202,6 +220,9 @@ def grade(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     raw = data.get("relevant_ids") if isinstance(data.get("relevant_ids"), list) else []
     wanted = {_text(pid).strip("[]").upper() for pid in raw}
     kept = [p for i, p in enumerate(passages) if prompts.passage_id(i) in wanted]
+    if kept:  # the fee passages are not about the question, but the checklist card needs them
+        fee_ids = set(state.get("fee_ids") or [])
+        kept += [p for p in passages if p.chunk_id in fee_ids and p not in kept]
     return {
         "relevant_ids": [prompts.passage_id(i) for i in range(len(kept))],
         "passages": kept,

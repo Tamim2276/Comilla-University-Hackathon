@@ -34,6 +34,7 @@ class AgentState(TypedDict, total=False):
     cache_key: str  # set only when the answer may be cached / served from the cache (FR-AGT-15)
     query: str  # what is sent to the retriever (rewrite_query changes it)
     passages: list[Passage]
+    fee_ids: list[str]  # passages added by retrieve only for the checklist fee; grade keeps them
     relevant_ids: list[str]  # "P1", "P2"... chosen by grade
     retries: int  # one counter for the grade, generate and verify loops (max MAX_RETRIEVAL_RETRIES)
     draft: dict[str, Any]  # the generate step's JSON
