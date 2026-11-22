@@ -125,7 +125,8 @@ Rules:
    Still fill every other field. Never ask about something already said in the conversation.
 9. Output JSON only, matching the schema exactly."""
 
-_VOICE_RULE = "End with a short sentence saying the details are coming by SMS."
+# The call adds the SMS sentence itself, only when an SMS is really queued (speech.py, FR-SMS-01).
+_VOICE_RULE = "It is spoken on a phone call: short sentences, no lists. Do not mention SMS."
 _APP_RULE = "The citizen reads the answer on a screen."
 
 GENERATE_SCHEMA: dict[str, Any] = {

@@ -41,25 +41,25 @@ Each person follows their own rows top to bottom. A step only needs the steps ab
 | 10 | D0-1 | Move the work to the new team repository | Tamim | 0 | done |
 | 11 | D1-R4 | Augmented questions + TF-IDF baseline | Tamim | 4 | done (test 89.8%, val 78.8%) |
 | 12 | D1-T4 | Agent v1 replaces the stub: Checkpoint 1 in Swagger | Tamim | 7 | done |
-| 13 | D1-R3 | App pages + chat page: Checkpoint 1 in the app | Ariful | 4 | |
-| 14 | D1-A3 | Twilio voice, echo mode | Ragib | 4 | |
-| 15 | D1-A4 | SMS adapters, background runner, full AskQuestion | Ariful | 4 | |
+| 13 | D1-R3 | App pages + chat page: Checkpoint 1 in the app | Ariful | 4 | done |
+| 14 | D1-A3 | Twilio voice, echo mode | Ragib | 4 | done |
+| 15 | D1-A4 | SMS adapters, background runner, full AskQuestion | Ariful | 4 | done |
 | 16 | D1-T6 | BanglaBERT training on your PC or Colab (runs while you continue) | Tamim | 3 | done (test 93.5%, CPU 13 min) |
 | 17 | D1-T5 | Grading, rewrite, verifier, follow-up, fallback | Tamim | 6 | done |
-| 18 | D1-A5 | Voice wired to AskQuestion + SMS: Checkpoint 2 | Ragib | 4 | |
-| 19 | D1-R5 | Checklist card, sources, history page | Ariful | 3 | |
-| 20 | D1-R7 | Mic input in the app | Ragib | 1 | |
+| 18 | D1-A5 | Voice wired to AskQuestion + SMS: Checkpoint 2 | Ragib | 4 | done |
+| 19 | D1-R5 | Checklist card, sources, history page | Ariful | 3 | done |
+| 20 | D1-R7 | Mic input in the app | Ragib | 1 | done |
 | 21 | D1-R6 | App flow tests + demo phrases | Ragib | 1 | |
 | 22 | D2-A1 | Call-back API, missed call, signature check | Ragib | 4 | |
 | 23 | D2-T1 | BanglaBERT adapter + router evaluation | Tamim | 3 | done (93.5%, 95.4% after LLM, 34 ms) |
-| 24 | D2-R1 | Admin APIs + dashboard | Ariful | 4 | |
+| 24 | D2-R1 | Admin APIs + dashboard | Ariful | 4 | done |
 | 25 | D2-R2 | "Call me" button + answer audio (TTS) | Ragib | 2 | |
-| 26 | D2-A2 | Async voice answer + voice error paths | Ragib | 2 | |
+| 26 | D2-A2 | Async voice answer + voice error paths | Ragib | 2 | done |
 | 27 | D2-T4 | Answer cache in the agent + pre-warm | Tamim | 1 | done |
 | 28 | D2-T2 | K-Means clusters + cluster APIs | Tamim | 2 | done |
-| 29 | D2-R5 | Cluster view in the dashboard | Ariful | 1 | |
-| 30 | D2-R4 | App polish, 360 px check, PWA | Ariful | 1 | |
-| 31 | D2-T3 | RAG evaluation + answer check | Tamim | 2 | done (Recall@5 94.8%, refusal 100%, voice 3.4 s; team marks of answer_check.csv pending) |
+| 29 | D2-R5 | Cluster view in the dashboard | Ariful | 1 | done |
+| 30 | D2-R4 | App polish, 360 px check, PWA | Ariful | 1 | done |
+| 31 | D2-T3 | RAG evaluation + answer check | Tamim | 2 | done (Recall@5 96.9%, refusal 100%, answer check 100% correct, 32 of 32) |
 | 32 | D2-R3 | Demo data + scenario checks | Ariful | 1 | |
 | 33 | D2-A3 | Voice and API tests + hardening | Ragib | 1 | |
 | 34 | D2-ALL-1 | Full demo rehearsal + fixes | All | 1 | |

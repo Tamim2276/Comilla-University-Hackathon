@@ -30,6 +30,7 @@ class AgentState(TypedDict, total=False):
     service_id: str
     confidence: float
     router_source: RouterSource
+    needs_context: bool  # a short question after an answer that the local router put elsewhere
     cache_key: str  # set only when the answer may be cached / served from the cache (FR-AGT-15)
     query: str  # what is sent to the retriever (rewrite_query changes it)
     passages: list[Passage]

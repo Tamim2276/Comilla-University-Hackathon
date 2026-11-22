@@ -8,7 +8,7 @@ Nothing secret belongs in this file. Keys and Twilio values are shared privately
 
 ## Start here: everything to do once, in order (Ragib and Ariful)
 
-Do these steps first. The numbered entries below (newest first, 11 down to 1) explain what changed and why; read them from the top until you reach one you already read.
+Do these steps first. The numbered entries below (newest first, 14 down to 1) explain what changed and why; read them from the top until you reach one you already read.
 
 **1. Get the latest code**
 - `git checkout main`, then `git pull origin main`.
@@ -49,6 +49,29 @@ Do these steps first. The numbered entries below (newest first, 11 down to 1) ex
 
 **Later**
 - Later, deployment: Ariful puts the app on Vercel (set `VITE_API_URL` to the backend address Tamim gives you); the backend runs on the demo laptop with ngrok. Details when the time comes.
+
+---
+
+## 14. Short follow-up questions stay on topic, safe re-ingest, review of your work, 22 Nov
+
+**What changed**
+- A short question right after an answer ("আর কোথায় জমা দেবো?") was sometimes sent to another service by the local router. Now, when the question is short (6 words or fewer) and the router picks a different service than the last answer, the LLM reads the last turns and decides. Such answers are never cached. On a call this adds about 1 to 2 seconds to that one turn.
+- Running `python -m scripts.ingest` while the backend is running no longer breaks answers. Before, the server lost the search index ("Nothing found on disk") and fell back until it was restarted. Now the new index is built under a temporary name and swapped in at the end.
+- Birth registration: the "within how many days" question now finds the Act's section 8 (45 days) instead of the passage about hospitals.
+- Voice answers no longer end with "details are coming by SMS" from the AI. The call says `SMS_SENT` itself, and only when an SMS is really queued (after Ariful's step 3 below), so the caller never hears it twice or hears it when no SMS goes out.
+- SRS FR-CALL-10 now says what Ragib measured: the voice budget is 4 s, not 8 s, because Twilio already gave up on a 7.5 s reply on a real call.
+- Answer check: all 32 rows are marked correct, so answer correctness is **100%** (`docs/results/rag_eval.md`). Thank you both.
+- Tamim checked everything in `main` from D1-R5 to D2-R4: `ruff`, all backend tests and `npm run build` pass, and the layer rules hold.
+
+**You need to**
+1. Pull `main` and merge it into your branch.
+2. Run `python -m scripts.ingest` once (new birth registration heading).
+3. **Ariful:** the call never says "SMS পাঠানো হয়েছে", because `AskResult` has no `sms_scheduled` field (Ragib's `speech.py` already reads it and defaults to False). Add `sms_scheduled: bool = False` to `AskResult` in `app/application/dto.py`, set it to `send_sms` in `AskQuestion.execute`, and add a test. Nothing else changes: Ragib's code then speaks the SMS line by itself.
+4. **Ragib:** after Ariful's change, check one real call: an answer with a checklist should end with the SMS line, and the SMS should arrive.
+
+**Good to know**
+- The thread pool has 4 workers, shared by SMS sending and slow voice answers. That is enough for the demo (one or two calls at a time).
+- The app bundle is about 715 kB (warning only). Splitting it is optional, not needed for the demo.
 
 ---
 
