@@ -244,6 +244,29 @@ class Container:
 
         return VoiceAnswers(self.handle_voice_turn.execute, self.runner)
 
+    @cached_property
+    def call_placer(self) -> "TwilioCallPlacer":  # noqa: F821
+        """FR-CALL-07, 08: outbound calls through Twilio; they start at PUBLIC_URL/voice/start."""
+        from app.infrastructure.telephony.twilio_call_placer import TwilioCallPlacer
+
+        s = self.settings
+        token = s.twilio_auth_token.get_secret_value()
+        return TwilioCallPlacer(s.twilio_account_sid, token, s.twilio_number, s.public_url)
+
+    @cached_property
+    def start_callback(self) -> "StartCallback":  # noqa: F821
+        """FR-CALL-07: "Call me" and missed-call call-backs, one per number per 60 s."""
+        from app.application.use_cases.start_callback import StartCallback
+
+        return StartCallback(self.call_placer, self.calls)
+
+    @cached_property
+    def handle_missed_call(self) -> "HandleMissedCall":  # noqa: F821
+        """FR-CALL-08 (MISSED_CALL_MODE=true): reject the call, call back after a few seconds."""
+        from app.application.use_cases.start_callback import HandleMissedCall
+
+        return HandleMissedCall(self.start_callback, self.runner)
+
     # ------------------------------------------------------------ SMS, background and admin area
     # sms + runner (D1-A4, also passed into ask_question above); admin use cases (D2-R1).
 
