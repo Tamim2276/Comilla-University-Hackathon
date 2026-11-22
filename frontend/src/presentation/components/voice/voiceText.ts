@@ -16,3 +16,28 @@ export const MIC_ERROR: Record<Exclude<SpeechInputError, 'aborted'>, string> = {
   network: 'কথা বুঝতে ইন্টারনেট লাগে। সংযোগ দেখে আবার চেষ্টা করুন।',
   failed: 'কথা বোঝা যায়নি। আবার বলুন অথবা লিখে প্রশ্ন করুন।',
 }
+
+export const AUDIO_UI = {
+  play: 'শুনুন',
+  stop: 'থামুন',
+  loading: 'আনছি…',
+  playLabel: 'উত্তরটি শুনুন',
+  stopLabel: 'শোনা বন্ধ করুন',
+  failed: 'এখন শোনানো যাচ্ছে না। উত্তরটি পড়ে নিন।',
+} as const
+
+export const CALL_UI = {
+  callMe: 'আমাকে কল করুন',
+  callMeEn: 'Call me',
+  calling: 'কল করা হচ্ছে…',
+  called: 'আপনার ফোনে কল যাচ্ছে। ফোনটি ধরে প্রশ্ন করুন।',
+  waitPrefix: 'আবার কল',
+  waitSuffix: 'সেকেন্ড পরে',
+} as const
+
+const BN_DIGITS = '০১২৩৪৫৬৭৮৯'
+
+/** 45 -> "৪৫" */
+export function bnNumber(n: number): string {
+  return String(n).replace(/\d/g, (d) => BN_DIGITS[Number(d)])
+}

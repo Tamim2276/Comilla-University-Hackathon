@@ -4,6 +4,7 @@ import logging
 
 import pytest
 
+from app.application.dto import AskResult
 from app.application.use_cases.ask_question import AskQuestion
 from app.domain.entities import Answer, Checklist, Citation, Message, Service
 from app.domain.policies import MAX_SMS_CHARS
@@ -56,8 +57,8 @@ class Setup:
             runner=self.runner if wired else None,
         )
 
-    def ask(self, channel: Channel = Channel.VOICE, call_sid: str | None = "CA1") -> None:
-        self.use_case.execute(PHONE, "বয়স্ক ভাতা পাবো?", channel, call_sid=call_sid)
+    def ask(self, channel: Channel = Channel.VOICE, call_sid: str | None = "CA1") -> AskResult:
+        return self.use_case.execute(PHONE, "বয়স্ক ভাতা পাবো?", channel, call_sid=call_sid)
 
 
 # ---------------------------------------------------------------- when an SMS is sent
@@ -149,6 +150,27 @@ def test_without_sms_and_runner_nothing_is_sent() -> None:
     assert s.sms.sent == []
     ((_, record),) = s.checklists.rows
     assert record.sms_sent is False  # not marked, because nothing was sent
+
+
+# ---------------------------------------------------------------- sms_scheduled (TEAM_UPDATES 14)
+
+
+def test_result_says_when_this_answer_queued_the_sms() -> None:
+    s = Setup()
+    assert s.ask().sms_scheduled is True  # first answer about the service: the call says SMS_SENT
+    assert s.ask().sms_scheduled is False  # same service again: no SMS, so the call must not claim one
+
+
+def test_result_says_no_sms_for_the_app_and_for_answers_without_a_checklist() -> None:
+    assert Setup().ask(channel=Channel.APP, call_sid=None).sms_scheduled is False
+    fallback = Answer(status=AnswerStatus.FALLBACK, speech_text="দুঃখিত।", display_text="দুঃখিত।")
+    assert Setup(fallback).ask().sms_scheduled is False
+    assert Setup(wired=False).ask().sms_scheduled is False
+
+
+def test_result_still_says_scheduled_when_the_send_later_fails() -> None:
+    # Queued is what the caller is told; a failed send is only logged (FR-SMS-05).
+    assert Setup(sms=fakes.FakeSms(succeed=False)).ask().sms_scheduled is True
 
 
 # ---------------------------------------------------------------- failures (FR-SMS-05)
