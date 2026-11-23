@@ -1,10 +1,14 @@
-# Data services for Ek Call: Postgres (history, logs, answer cache) and Chroma (document search).
-# The backend and the app still run on the machine for now; they reach these on localhost.
+# Ek Call services: Postgres (history, logs, answer cache), Chroma (document search) and the backend.
 #
 # Run from backend/:
-#   docker compose up -d        start (data stays in the named volumes between restarts)
-#   docker compose ps           both should say "healthy"
-#   docker compose down         stop (add -v ONLY to delete all data)
+#   docker compose up -d --build     build the backend image and start everything
+#   docker compose ps                all three should say "healthy"
+#   docker compose logs -f backend   backend log
+#   docker compose down              stop (add -v ONLY to delete all data)
+#
+# Developing with `uvicorn --reload` on the machine instead: start only the data services,
+#   docker compose up -d postgres chroma
+# and the backend on the machine reaches them on localhost (DATABASE_URL and CHROMA_HOST in .env).
 #
 # POSTGRES_USER, POSTGRES_PASSWORD and POSTGRES_DB come from backend/.env (Compose reads the .env next to
 # this file; see .env.example). Ports listen on 127.0.0.1 only, so other machines cannot reach them.
@@ -44,6 +48,33 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  backend:
+    build: .
+    image: ekcall-backend
+    restart: unless-stopped
+    env_file: .env # all backend settings; the two lines below replace the localhost addresses
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      CHROMA_HOST: chroma
+      CHROMA_PORT: "8000" # port inside the Docker network (8001 is only the host side)
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000" # ngrok and the app on this machine reach it here
+    volumes:
+      # BanglaBERT, e5 and TF-IDF (about 900 MB) are not in the image. They are read from a folder on the
+      # machine, outside the project: ~/Desktop/models (unzip ekcall_models.zip into ~/Desktop), or
+      # MODELS_DIR in .env. Start fails if the folder is missing, instead of running without models.
+      - type: bind
+        source: ${MODELS_DIR:-~/Desktop/models}
+        target: /app/data/models
+        read_only: true
+        bind:
+          create_host_path: false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      chroma:
+        condition: service_healthy
 
 volumes:
   postgres-data:
