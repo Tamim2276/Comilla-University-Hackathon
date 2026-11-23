@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Deploys the latest main on the server: updates the project folder, rebuilds the backend image and
-# restarts it. Run by the CD workflow on our self-hosted runner.
+# Deploys the latest main on the Azure VM: updates the project folder, rebuilds the backend image and
+# restarts it (docs/deploy.md). The CD workflow sends this file over SSH from a GitHub runner and runs
+# it on the VM with `bash -s`, so commands here must not read standard input. By hand, on the VM:
+#   bash ~/Desktop/Comilla-University-Hackathon/deploy/deploy.sh
 #
 # Uncommitted changes in the folder are discarded. Git-ignored files (backend/.env, backend/data/...)
 # are kept.
