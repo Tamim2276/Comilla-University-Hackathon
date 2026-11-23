@@ -1,5 +1,6 @@
-# CD: after CI passes on main, our own server (a self-hosted GitHub runner) fetches the new commit,
-# builds the app, updates the backend and restarts both services. See docs/deploy.md.
+# CD: after CI passes on main, our own server (a self-hosted GitHub runner) runs deploy/deploy.sh:
+# it updates ~/Desktop/Comilla-University-Hackathon to main, rebuilds the backend image and restarts
+# it with Docker Compose. See docs/deploy.md.
 #
 # Safety: this job runs on our machine, so it only ever runs for pushes to main in this repository
 # (never for pull requests or forks) and the server keeps its own .env; no secrets live in GitHub.
@@ -32,10 +33,10 @@ jobs:
     runs-on: [self-hosted, linux, ekcall]
     timeout-minutes: 40
     steps:
+      # Only to get deploy.sh itself; the script deploys from the project folder on the server.
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-          fetch-depth: 0 # deploy.sh compares with the last deployed commit
 
       - name: Deploy
-        run: bash deploy/deploy.sh
+        run: bash deploy/deploy.sh # bash: works even if the file lost its executable bit
