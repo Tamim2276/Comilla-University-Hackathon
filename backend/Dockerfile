@@ -16,7 +16,7 @@ ENV PATH="/venv/bin:$PATH" PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # Same order as requirements.txt says: CPU PyTorch first (the default one would pull GPU libraries),
 # then the rest, then the BanglaBERT text normaliser (from git). Own layer, so code changes reuse it.
-RUN pip install torch==2.15.0 --index-url https://download.pytorch.org/whl/cpu
+RUN pip install torch==2.15.0 --index-url https://download.pytorch.org/whl/cpu --timeout 600 --retries 10
 COPY requirements.txt .
 RUN pip install -r requirements.txt \
     && pip install git+https://github.com/csebuetnlp/normalizer
