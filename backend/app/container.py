@@ -129,6 +129,8 @@ class Container:
             self.settings.chroma_dir,
             self.embedder,
             min_score=self.settings.retrieval_min_score,
+            host=self.settings.chroma_host,
+            port=self.settings.chroma_port,
         )
 
     # ------------------------------------------------------------ LLM (FR-AGT-16, FR-AGT-18)
@@ -429,7 +431,7 @@ class Container:
 
     def check_vector_db(self) -> str:
         """ok = passages are stored; empty = run `python -m scripts.ingest`. Never loads the model."""
-        if not self.settings.chroma_dir.exists():
+        if not self.settings.chroma_host and not self.settings.chroma_dir.exists():
             return EMPTY  # do not create the folder just by asking
         try:
             return "ok" if self.retriever.count() > 0 else EMPTY

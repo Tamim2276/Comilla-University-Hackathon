@@ -12,6 +12,7 @@ httpx==0.28.1
 
 # Database + config files
 sqlalchemy==2.1.9
+psycopg[binary]==3.3.9  # Postgres driver (DATABASE_URL=postgresql+psycopg://...)
 pyyaml==6.0.3
 
 # Phone calls
