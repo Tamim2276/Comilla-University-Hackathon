@@ -1,0 +1,49 @@
+# Data services for Ek Call: Postgres (history, logs, answer cache) and Chroma (document search).
+# The backend and the app still run on the machine for now; they reach these on localhost.
+#
+#   docker compose up -d        start (data stays in the named volumes between restarts)
+#   docker compose ps           both should say "healthy"
+#   docker compose down         stop (add -v ONLY to delete all data)
+#
+# The Postgres password comes from the file .env next to this one (not in git, see .env.example).
+# Ports listen on 127.0.0.1 only, so other machines on the network cannot reach the databases.
+
+name: ekcall
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ekcall
+      POSTGRES_USER: ekcall
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (see .env.example)}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ekcall -d ekcall"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  chroma:
+    # Must match chromadb in backend/requirements.txt: the client refuses a different server version.
+    image: chromadb/chroma:1.5.9
+    restart: unless-stopped
+    environment:
+      ANONYMIZED_TELEMETRY: "FALSE"
+    ports:
+      - "127.0.0.1:8001:8000" # 8000 on the host is the backend
+    volumes:
+      - chroma-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8000 && printf \"GET /api/v2/heartbeat HTTP/1.0\\r\\n\\r\\n\" >&3 && grep -q 200 <&3'"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-data:
+  chroma-data:
