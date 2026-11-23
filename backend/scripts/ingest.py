@@ -48,7 +48,9 @@ def main() -> int:
     print(f"\n{'service':22} {'passages':>8}")
     for sid in service_ids:
         print(f"{sid:22} {per_service.get(sid, 0):>8}")
-    print(f"{'total stored':22} {stored:>8}   (in {container.settings.chroma_dir})")
+    cfg = container.settings
+    where = f"Chroma server {cfg.chroma_host}:{cfg.chroma_port}" if cfg.chroma_host else cfg.chroma_dir
+    print(f"{'total stored':22} {stored:>8}   (in {where})")
     print(f"answer cache cleared: {clear_answer_cache(container)} old answers removed")
 
     embedder = container.embedder

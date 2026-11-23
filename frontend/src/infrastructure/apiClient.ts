@@ -4,6 +4,7 @@ import type { ApiPort } from '../application/ports'
 import { MSG } from '../domain/messages'
 import {
   ApiError,
+  type AdminLoginResponse,
   type AdminQuestion,
   type AdminStats,
   type AnswerStatus,
@@ -19,10 +20,14 @@ interface ErrorBody {
   error?: { code?: string; message_bn?: string; message_en?: string }
 }
 
+/**
+ * @param adminToken returns the current admin session token (or null). It is read on every admin
+ *   request, so a new login or a logout takes effect at once. The admin password is never stored here.
+ */
 export function createApiClient(
   baseUrl: string,
   timeoutMs: number,
-  adminToken = '',
+  adminToken: () => string | null = () => null,
   rebuildTimeoutMs = timeoutMs,
 ): ApiPort {
   async function request<T>(path: string, init: RequestInit = {}, waitMs = timeoutMs): Promise<T> {
@@ -56,7 +61,10 @@ export function createApiClient(
   }
 
   const phonePath = (phone: string) => `/api/v1/conversations/${encodeURIComponent(phone)}`
-  const adminHeaders: Record<string, string> = adminToken ? { 'X-Admin-Token': adminToken } : {}
+  const adminHeaders = (): Record<string, string> => {
+    const token = adminToken()
+    return token ? { Authorization: `Bearer ${token}` } : {}
+  }
 
   return {
     chat: (body: ChatRequest) =>
@@ -69,21 +77,29 @@ export function createApiClient(
       request<HistoryResponse>(`${phonePath(phone)}?limit=${limit}`),
     deleteHistory: async (phone: string) =>
       (await request<{ deleted: boolean }>(phonePath(phone), { method: 'DELETE' })).deleted,
-    adminStats: () => request<AdminStats>('/api/v1/admin/stats', { headers: adminHeaders }),
+    deleteChecklist: async (phone: string, checklistId: string) =>
+      (
+        await request<{ deleted: boolean }>(`${phonePath(phone)}/checklists/${encodeURIComponent(checklistId)}`, {
+          method: 'DELETE',
+        })
+      ).deleted,
+    adminLogin: (password: string) =>
+      request<AdminLoginResponse>('/api/v1/admin/login', { method: 'POST', body: JSON.stringify({ password }) }),
+    adminStats: () => request<AdminStats>('/api/v1/admin/stats', { headers: adminHeaders() }),
     adminQuestions: async (options: { status?: AnswerStatus; limit?: number } = {}) => {
       const query = new URLSearchParams({ limit: String(options.limit ?? 20) })
       if (options.status) query.set('status', options.status)
       const body = await request<{ questions: AdminQuestion[] }>(`/api/v1/admin/questions?${query}`, {
-        headers: adminHeaders,
+        headers: adminHeaders(),
       })
       return body.questions
     },
     adminClusters: async () =>
-      (await request<{ clusters: QuestionCluster[] }>('/api/v1/admin/clusters', { headers: adminHeaders })).clusters,
+      (await request<{ clusters: QuestionCluster[] }>('/api/v1/admin/clusters', { headers: adminHeaders() })).clusters,
     rebuildClusters: () =>
       request<RebuildResult>(
         '/api/v1/admin/clusters/rebuild',
-        { method: 'POST', headers: adminHeaders },
+        { method: 'POST', headers: adminHeaders() },
         rebuildTimeoutMs,
       ),
   }

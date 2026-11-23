@@ -190,6 +190,7 @@ class InMemoryConversationRepo:
 class InMemoryChecklistRepo:
     def __init__(self) -> None:
         self.rows: list[tuple[str, ChecklistRecord]] = []
+        self._next_id = 1  # like an autoincrement key: an id is never given out twice
 
     def save(
         self,
@@ -199,7 +200,10 @@ class InMemoryChecklistRepo:
         sms_sent: bool,
         call_sid: str | None = None,
     ) -> None:
-        record = ChecklistRecord(checklist, tuple(citations), sms_sent, call_sid, datetime.now(UTC))
+        record = ChecklistRecord(
+            checklist, tuple(citations), sms_sent, call_sid, datetime.now(UTC), id=str(self._next_id)
+        )
+        self._next_id += 1
         self.rows.append((phone.e164, record))
 
     def sms_already_sent(self, call_sid: str, service_id: str) -> bool:
@@ -216,6 +220,11 @@ class InMemoryChecklistRepo:
         before = len(self.rows)
         self.rows = [row for row in self.rows if row[0] != phone.e164]
         return before - len(self.rows)
+
+    def delete_one(self, phone: PhoneNumber, checklist_id: str) -> bool:
+        before = len(self.rows)
+        self.rows = [(p, r) for p, r in self.rows if not (p == phone.e164 and r.id == checklist_id)]
+        return len(self.rows) < before
 
 
 class InMemoryQuestionLogRepo:

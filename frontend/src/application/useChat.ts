@@ -1,8 +1,7 @@
 // Use case: ask Ek Call a question and keep the conversation on screen (FR-APP-02, FR-APP-08).
 
 import { useCallback, useRef, useState } from 'react'
-import { MSG } from '../domain/messages'
-import { ApiError, type ChatMessage } from '../domain/types'
+import { errorText, type ChatMessage } from '../domain/types'
 import { usePorts } from './portsContext'
 
 /** Same limit as the API (ChatRequest.message, 500 characters). */
@@ -38,8 +37,7 @@ export function useChat(phone: string): Chat {
         const answer = await api.chat({ phone, message: question })
         setMessages((list) => [...list, { id: newId(), role: 'assistant', answer }])
       } catch (err) {
-        const textBn = err instanceof ApiError ? err.messageBn : MSG.ERROR
-        setMessages((list) => [...list, { id: newId(), role: 'error', text: textBn }])
+        setMessages((list) => [...list, { id: newId(), role: 'error', text: errorText(err) }])
       } finally {
         busy.current = false
         setLoading(false)

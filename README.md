@@ -21,8 +21,23 @@ language, from the official rules, and sends him the checklist as an SMS he can 
 | Channel | What the citizen does | What happens |
 |---|---|---|
 | **Phone call** | Calls the number (or presses "Call me" in the app) and asks in Bangla | A short spoken answer (at most 3 sentences), then **one SMS checklist** per service (who, papers, fee, where, source) |
-| **Web app** | Types or speaks a question | Answer with a **checklist card** and **links to the official sources**; answer audio; history of past checklists (also from calls) |
-| **Admin dashboard** | An officer opens `/admin` | Questions per service and channel, answered vs unanswered, latency, calls today, **topics found by K-Means**, auto-refresh every 10 s |
+| **Web app** | Types or speaks a question | Answer with a **checklist card** and **links to the official sources**; answer audio; history of past checklists (also from calls), where he can delete the ones he chooses |
+| **Admin dashboard** | An officer opens `/admin` and signs in with the admin password | Questions per service and channel, answered vs unanswered, latency, calls today, **topics found by K-Means**, auto-refresh every 10 s, a হালনাগাদ (refresh) button that reloads the whole page |
+
+**In the web app:**
+
+- **বাংলা ⇄ English** button in the header (start page, chat, history, admin) switches the interface language and is
+  remembered. Answers, checklists and the voice stay in Bangla.
+- **Profile menu:** the round button at the top right of the chat shows the first letter of the user's name (or a
+  person icon). It opens a panel with the name, the mobile number, **আগের উত্তর** (history),
+  **আগের উত্তর মুছে ফেলুন** (delete past answers) and, at the bottom, **নম্বর বদলান** (change number). It closes on a
+  second click, a click outside, or Esc.
+- **Name:** optional, typed in the profile menu (at most 40 characters). It is saved for that number on this device, so
+  it comes back with "স্বাগতম, {name}!" whenever the same number signs in again. It is never sent to the server.
+- **Delete chosen answers:** "আগের উত্তর মুছে ফেলুন" opens the history with a **মুছুন** button next to every
+  checklist. Each delete asks "এই উত্তরটি মুছবেন?" (হ্যাঁ, মুছুন / না, with "না" selected first) and removes only that
+  checklist on the server. **শেষ** leaves delete mode.
+- **Admin pages:** the Ek Call logo goes back to the start page; sign-out and হালনাগাদ are next to the title.
 
 **The 8 services:** বয়স্ক ভাতা (old age allowance), বিধবা ভাতা (widow allowance), প্রতিবন্ধী ভাতা (disability
 allowance), জন্ম নিবন্ধন (birth registration), এনআইডি সংশোধন (NID correction), ই-পাসপোর্ট (e-passport),
@@ -112,7 +127,7 @@ check: [`rag_eval.md`](docs/results/rag_eval.md). End-to-end scenarios S1 to S9:
 | Voice | Twilio Programmable Voice (`bn-BD` speech recognition, Bangla TTS), gTTS for the app |
 | SMS | textbee (Android phone with a Bangladeshi SIM as the gateway); console mode for development |
 | Topics | K-Means (scikit-learn), k by silhouette score, Bangla labels from Gemini |
-| Frontend | React 19, Vite, TypeScript, Tailwind CSS 4, react-router, recharts, Web Speech API; installable (PWA) |
+| Frontend | React 19, Vite, TypeScript, Tailwind CSS 4, react-router, recharts, Web Speech API; interface in Bangla or English; installable (PWA) |
 
 ## Quick start
 
@@ -143,10 +158,13 @@ No Gemini key yet? Set `AGENT_ENGINE=stub` for a fixed sample answer while build
 
 ```powershell
 cd frontend
-copy .env.example .env                         # VITE_API_URL, VITE_ADMIN_TOKEN
+copy .env.example .env                         # VITE_API_URL (the backend address)
 npm install
 npm run dev                                    # http://localhost:5173 (admin: /admin)
 ```
+
+The admin password is **not** in the frontend: set `ADMIN_TOKEN="..."` in `backend/.env` and restart the backend.
+Without it `/admin` stays closed (503). Never put a secret in a `VITE_` variable, because it ends up in the built app.
 
 ### Phone calls
 
@@ -173,12 +191,13 @@ comment on the same line. Never commit `.env`.
 | `VALIDATE_TWILIO_SIGNATURE`, `MISSED_CALL_MODE` | Twilio signature check; reject a call and call back (caller pays nothing) |
 | `SMS_BACKEND` | `console` (prints the SMS) or `textbee` (real SMS) |
 | `TEXTBEE_API_KEY`, `TEXTBEE_DEVICE_ID` | textbee gateway |
-| `ADMIN_TOKEN` | protects `/api/v1/admin/*` (header `X-Admin-Token`); empty = open |
+| `ADMIN_TOKEN` | the admin password for `/admin`; empty = admin closed for everybody. Use quotes if it contains `;`, `'` or `#` |
+| `ADMIN_SESSION_HOURS` | how long an admin sign-in lasts (default 8) |
 | `PHONE_HASH_SALT` | salt for the phone hash in the question logs; do not change it later |
 | `FRONTEND_ORIGINS` | allowed web app addresses (CORS) |
 
-Web app (`frontend/.env`): `VITE_API_URL` (backend address) and `VITE_ADMIN_TOKEN` (same as `ADMIN_TOKEN`; it is
-built into the browser app, so it only keeps casual visitors out of the demo dashboard).
+Web app (`frontend/.env`): only `VITE_API_URL` (the backend address). Never put a secret in a `VITE_` variable:
+they are built into the app that every browser downloads.
 
 ## Scripts (`backend/`, venv active)
 
@@ -208,8 +227,10 @@ Swagger: `http://localhost:8000/docs`. Contract: `docs/SRS.md` Section 8. Errors
 | GET | `/api/v1/services` | The 8 services (+ `other`) |
 | POST | `/api/v1/chat` | Ask a question (app): answer, checklist, sources |
 | GET / DELETE | `/api/v1/conversations/{phone}` | History of a phone number / delete it |
+| DELETE | `/api/v1/conversations/{phone}/checklists/{id}` | Delete one checklist of that number (404 if it is not theirs) |
 | POST | `/api/v1/callback` | "Call me": outbound call, at most once per number per 60 s |
 | POST | `/api/v1/tts` | Bangla speech (MP3) for an answer |
+| POST | `/api/v1/admin/login` | Admin password → session token (8 h); wrong passwords are limited to 5 per minute |
 | GET | `/api/v1/admin/stats`, `/api/v1/admin/questions` | Dashboard numbers and logged questions |
 | POST / GET | `/api/v1/admin/clusters/rebuild`, `/api/v1/admin/clusters` | Question topics (K-Means) |
 | POST | `/voice/incoming`, `/voice/respond`, `/voice/start`, `/voice/result`, `/voice/status` | Twilio webhooks |
@@ -221,7 +242,8 @@ Swagger: `http://localhost:8000/docs`. Contract: `docs/SRS.md` Section 8. Errors
    *"আমার বয়স ৬৭। আমি কি বয়স্ক ভাতা পাবো? কী কী লাগবে?"*; show the SMS arriving.
 3. **Follow-up**: *"বিধবা ভাতার জন্য কী লাগে?"*; the agent may ask about residence, answer *"হ্যাঁ"*.
 4. **App**: History with the same number (shared memory); ask *"NID-te namer banan bhul, ki korbo?"* by voice;
-   show the checklist card and the source links.
+   show the checklist card and the source links. Open the profile menu: add a name, then delete one past answer
+   (the confirmation, then only that one is gone). Switch to English and back.
 5. **Safety**: *"প্রতিবেশীর সাথে জমি নিয়ে ঝামেলা, কী করবো?"* → the agent refuses and points to 333.
 6. **Dashboard**: numbers, questions per service, topics, unanswered list. The history there is sample data
    from `seed_demo_data` (marked "নমুনা"), plus the questions of this demo.
@@ -245,8 +267,17 @@ fakes and on SQLite, so the fakes cannot drift from the real database.
 
 - Question logs store a **salted hash** of the phone number, never the number itself; server logs show only a
   masked number (`+880171*****78`).
-- `DELETE /api/v1/conversations/{phone}` removes a number's history and checklists.
+- **Deleting:** in the app the user chooses which past answers to delete, one at a time after a confirmation
+  (`DELETE /api/v1/conversations/{phone}/checklists/{id}`; a number can only delete its own checklists, others get
+  404, and deleted ids are never reused). `DELETE /api/v1/conversations/{phone}` still removes all of a number's
+  history and checklists at once.
+- The user's **name** is kept only in the browser (`localStorage`, one name per number); the API never receives it.
 - Secrets live only in `.env` files, which are git-ignored.
+- **Admin sign-in:** the officer types the admin password (`ADMIN_TOKEN`) on `/admin`. The backend checks it in constant
+  time and returns a signed session token that expires after `ADMIN_SESSION_HOURS` (default 8). The app keeps only
+  this token, for the browser tab, and sends it as `Authorization: Bearer …`; the password itself is never stored or
+  built into the app. After 5 wrong passwords in a minute the sign-in waits a minute. Changing `ADMIN_TOKEN` signs
+  everyone out. Swagger and scripts can still send the password in the `X-Admin-Token` header.
 
 ## Project layout
 
@@ -274,7 +305,12 @@ docs/                    SRS, build plan, setup, team updates, results
   show "তথ্য পাওয়া যায়নি" for the fee, because no document we have states one.
 - The LLM runs in the cloud (Gemini free tier); heavy demand can slow or refuse an answer, which the app and the
   call report with a polite Bangla message.
-- The dashboard token is a demo-level protection, not a login system.
+- One shared admin password (no user accounts); the wrong-password limit is per server process.
+- The user's name is saved per browser, so it does not follow the number to another phone or browser.
+- Deleting a checklist removes the checklist, not the chat messages of that question (the History page shows only
+  checklists). The anonymous question logs (hashed number) stay for the dashboard numbers.
+- An `ekcall.db` created before this build can still reuse the id of the newest checklist after it is deleted; delete
+  the file once (then run `seed_demo_data` again) to get the fixed table.
 
 ## Documentation
 
@@ -292,4 +328,4 @@ docs/                    SRS, build plan, setup, team updates, results
 |---|---|
 | Md. Tamim Hossain (team lead) | AI agent and its data: official documents, question sets, routers (TF-IDF, BanglaBERT, LLM), retrieval, LLM adapters, agent graph, verifier, answer cache, clustering, evaluation |
 | Md. Ragib Hossain Rifat | Voice: Twilio call flow, call-back and missed-call mode, signature check, async voice answer, text-to-speech; microphone, answer audio and "Call me" in the app |
-| Md. Ariful Islam | Web app (start, chat, checklist card, sources, history), SMS (textbee, console) and background runner, admin APIs and dashboard with topics, demo data, scenario checks |
+| Md. Ariful Islam | Web app (start, chat, checklist card, sources, history with chosen deletes, profile menu, Bangla/English interface), SMS (textbee, console) and background runner, admin sign-in, admin APIs and dashboard with topics, demo data, scenario checks |

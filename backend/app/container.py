@@ -29,6 +29,7 @@ from app.application.ports.repositories import (
     QuestionLogRepo,
 )
 from app.application.use_cases.admin import GetAdminStats, ListQuestions
+from app.application.use_cases.admin_auth import AdminAuth
 from app.application.use_cases.ask_question import AskQuestion
 from app.application.use_cases.clusters import ListClusters, RebuildClusters
 from app.application.use_cases.history import DeleteHistory, GetHistory
@@ -128,6 +129,8 @@ class Container:
             self.settings.chroma_dir,
             self.embedder,
             min_score=self.settings.retrieval_min_score,
+            host=self.settings.chroma_host,
+            port=self.settings.chroma_port,
         )
 
     # ------------------------------------------------------------ LLM (FR-AGT-16, FR-AGT-18)
@@ -282,6 +285,12 @@ class Container:
         return SynthesizeSpeech(self.tts)
 
     # ------------------------------------------------------------ SMS, background and admin area
+    @cached_property
+    def delete_checklist(self) -> "DeleteChecklist":  # noqa: F821 (imported below)
+        from app.application.use_cases.history_items import DeleteChecklist
+
+        return DeleteChecklist(self.checklists)
+
     # sms + runner (D1-A4, also passed into ask_question above); admin use cases (D2-R1).
 
     @cached_property
@@ -306,6 +315,12 @@ class Container:
     def list_questions(self) -> ListQuestions:
         """FR-ADM-02: newest questions, e.g. only the unanswered (fallback) ones."""
         return ListQuestions(self.question_logs, self.services)
+
+    @cached_property
+    def admin_auth(self) -> AdminAuth:
+        """FR-ADM-05: admin login and session tokens. No ADMIN_TOKEN: the admin area is closed."""
+        s = self.settings
+        return AdminAuth(s.admin_token.get_secret_value(), session_hours=s.admin_session_hours)
 
     # ------------------------------------------------------------ AI area
     # Planned here: classifier (tfidf | banglabert | llm), the LangGraph engine (replaces answer_engine
@@ -416,7 +431,7 @@ class Container:
 
     def check_vector_db(self) -> str:
         """ok = passages are stored; empty = run `python -m scripts.ingest`. Never loads the model."""
-        if not self.settings.chroma_dir.exists():
+        if not self.settings.chroma_host and not self.settings.chroma_dir.exists():
             return EMPTY  # do not create the folder just by asking
         try:
             return "ok" if self.retriever.count() > 0 else EMPTY

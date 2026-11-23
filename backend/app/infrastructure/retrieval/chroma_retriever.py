@@ -1,4 +1,6 @@
-"""Retriever adapter: Chroma persistent store + our own embedder (FR-AGT-05, FR-DATA-03).
+"""Retriever adapter: Chroma store + our own embedder (FR-AGT-05, FR-DATA-03).
+
+The store is the Chroma server when `host` is given (docker-compose.yml), else the files in `path`.
 
 search(): top-k passages for the chosen service. If fewer than `min_filtered` of them score at least
 `min_score`, it also searches all services and merges, so a wrong router guess can still find the
@@ -32,8 +34,12 @@ class ChromaRetriever:
         min_score: float = policies.RETRIEVAL_MIN_SCORE,
         min_filtered: int = policies.MIN_FILTERED_RESULTS,
         collection: str = COLLECTION,
+        host: str = "",
+        port: int = 8000,
     ) -> None:
         self._path = path
+        self._host = host
+        self._port = port
         self._embedder = embedder
         self._min_score = min_score
         self._min_filtered = min_filtered
@@ -51,9 +57,13 @@ class ChromaRetriever:
                     import chromadb
                     from chromadb.config import Settings as ChromaSettings
 
-                    self._client = chromadb.PersistentClient(
-                        path=str(self._path), settings=ChromaSettings(anonymized_telemetry=False)
-                    )
+                    settings = ChromaSettings(anonymized_telemetry=False)
+                    if self._host:
+                        self._client = chromadb.HttpClient(
+                            host=self._host, port=self._port, settings=settings
+                        )
+                    else:
+                        self._client = chromadb.PersistentClient(path=str(self._path), settings=settings)
         return self._client
 
     def _collection(self) -> Any:

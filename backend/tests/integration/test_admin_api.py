@@ -13,6 +13,7 @@ from app.domain.value_objects import AnswerStatus, Channel
 from app.main import create_app
 
 NO_DIR = Path(__file__).parent / "no_such_dir"
+TEST_ADMIN = "test-admin-password"
 
 
 def app_client(admin_token: str = "") -> Iterator[TestClient]:
@@ -47,7 +48,9 @@ def app_client(admin_token: str = "") -> Iterator[TestClient]:
 
 @pytest.fixture
 def client() -> Iterator[TestClient]:
-    yield from app_client()
+    for c in app_client(admin_token=TEST_ADMIN):
+        c.headers["X-Admin-Token"] = TEST_ADMIN  # signed in for every request of these tests
+        yield c
 
 
 def test_stats(client: TestClient) -> None:
@@ -108,5 +111,11 @@ def test_admin_token_is_required_when_set() -> None:
         gen.close()
 
 
-def test_no_token_configured_means_open(client: TestClient) -> None:
-    assert client.get("/api/v1/admin/stats").status_code == 200
+def test_no_token_configured_means_closed() -> None:
+    gen = app_client(admin_token="")
+    client = next(gen)
+    try:
+        assert client.get("/api/v1/admin/stats").status_code == 503
+        assert client.get("/api/v1/admin/questions").status_code == 503
+    finally:
+        gen.close()

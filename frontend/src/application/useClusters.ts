@@ -2,8 +2,8 @@
 // Topics only change on a rebuild, so they are loaded once, not every 10 s like the KPIs.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { MSG } from '../domain/messages'
-import { ApiError, type QuestionCluster, type RebuildResult } from '../domain/types'
+import type { LocalText } from '../domain/messages'
+import { ApiError, errorText, type QuestionCluster, type RebuildResult } from '../domain/types'
 import { usePorts } from './portsContext'
 
 export interface Clusters {
@@ -11,8 +11,8 @@ export interface Clusters {
   clusters: QuestionCluster[]
   loading: boolean
   rebuilding: boolean
-  /** Bangla error message, or null. */
-  error: string | null
+  /** Error in both languages, or null. */
+  error: LocalText | null
   unauthorized: boolean
   /** Result of the last rebuild in this session (how many topics, how they were labelled). */
   lastRebuild: RebuildResult | null
@@ -24,7 +24,7 @@ export function useClusters(): Clusters {
   const [clusters, setClusters] = useState<QuestionCluster[]>([])
   const [loading, setLoading] = useState(true)
   const [rebuilding, setRebuilding] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<LocalText | null>(null)
   const [unauthorized, setUnauthorized] = useState(false)
   const [lastRebuild, setLastRebuild] = useState<RebuildResult | null>(null)
   const mounted = useRef(true)
@@ -33,7 +33,7 @@ export function useClusters(): Clusters {
   const fail = useCallback((err: unknown) => {
     if (!mounted.current) return
     setUnauthorized(err instanceof ApiError && err.status === 401)
-    setError(err instanceof ApiError ? err.messageBn : MSG.ERROR)
+    setError(errorText(err))
   }, [])
 
   useEffect(() => {

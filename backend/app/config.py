@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     embed_model: str = "intfloat/multilingual-e5-small"
     embed_cache_dir: Path = BACKEND_DIR / "data" / "models" / "e5"
     chroma_dir: Path = BACKEND_DIR / "data" / "chroma"
+    chroma_host: str = ""  # set (e.g. localhost) to use the Chroma server instead of chroma_dir
+    chroma_port: int = 8001
     services_file: Path = BACKEND_DIR / "data" / "services.yaml"
     voice_fast_mode: bool = True
     agent_engine: Literal["langgraph", "stub"] = "langgraph"  # stub: fixed answer, no keys needed
@@ -73,6 +75,7 @@ class Settings(BaseSettings):
 
     # --- security + privacy (FR-ADM-05, NFR-PRIV-01)
     admin_token: SecretStr = SecretStr("")
+    admin_session_hours: float = Field(default=8, gt=0, le=72)  # how long an admin login lasts
     phone_hash_salt: SecretStr = SecretStr("")
 
     # ------------------------------------------------------------ derived values
@@ -101,7 +104,7 @@ class Settings(BaseSettings):
             warnings.append("PHONE_HASH_SALT is empty: phone hashes in question_logs are weak")
         if self.app_env == "demo":
             if not self.admin_token.get_secret_value():
-                warnings.append("APP_ENV=demo but ADMIN_TOKEN is empty: admin endpoints are open")
+                warnings.append("APP_ENV=demo but ADMIN_TOKEN is empty: the admin dashboard is closed (503)")
             if not self.validate_twilio_signature:
                 warnings.append("APP_ENV=demo but VALIDATE_TWILIO_SIGNATURE=false")
         return warnings

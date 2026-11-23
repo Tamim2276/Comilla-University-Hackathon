@@ -1,8 +1,8 @@
 // Use case: the admin dashboard data, refreshed every 10 seconds (FR-ADM-01, 02, 06; SRS 3.4).
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { MSG } from '../domain/messages'
-import { ApiError, type AdminQuestion, type AdminStats } from '../domain/types'
+import type { LocalText } from '../domain/messages'
+import { ApiError, errorText, type AdminQuestion, type AdminStats } from '../domain/types'
 import { usePorts } from './portsContext'
 
 export const REFRESH_MS = 10_000
@@ -16,8 +16,8 @@ export interface AdminData {
   unanswered: AdminQuestion[]
   /** True only until the first answer arrives. */
   loading: boolean
-  /** Bangla error of the last refresh, or null. Old data stays on screen. */
-  error: string | null
+  /** Error of the last refresh in both languages, or null. Old data stays on screen. */
+  error: LocalText | null
   /** The backend refused the admin token (401). */
   unauthorized: boolean
   updatedAt: Date | null
@@ -30,7 +30,7 @@ export function useAdmin(): AdminData {
   const [recent, setRecent] = useState<AdminQuestion[]>([])
   const [unanswered, setUnanswered] = useState<AdminQuestion[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<LocalText | null>(null)
   const [unauthorized, setUnauthorized] = useState(false)
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const inFlight = useRef(false) // never two refreshes at the same time
@@ -55,7 +55,7 @@ export function useAdmin(): AdminData {
     } catch (err) {
       if (!mounted.current) return
       setUnauthorized(err instanceof ApiError && err.status === 401)
-      setError(err instanceof ApiError ? err.messageBn : MSG.ERROR)
+      setError(errorText(err))
     } finally {
       inFlight.current = false
       if (mounted.current) setLoading(false)

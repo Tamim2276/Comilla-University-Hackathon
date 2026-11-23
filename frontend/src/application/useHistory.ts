@@ -1,41 +1,39 @@
 // Use case: show the past checklists of this phone number, from the app and from calls (FR-APP-05).
 
 import { useCallback, useEffect, useState } from 'react'
-import { MSG } from '../domain/messages'
-import { ApiError, type ChecklistRecord } from '../domain/types'
+import type { LocalText } from '../domain/messages'
+import { errorText, type ChecklistRecord } from '../domain/types'
 import { usePorts } from './portsContext'
 
 export interface History {
   /** Newest first, as the API returns them. */
   checklists: ChecklistRecord[]
-  /** service id -> Bangla service name (from GET /api/v1/services). */
-  serviceNames: Record<string, string>
   loading: boolean
-  /** Bangla error message, or null. */
-  error: string | null
+  /** Error in both languages, or null. */
+  error: LocalText | null
   reload(): void
+  /** Takes one checklist off the list on screen (after the server deleted it). */
+  forget(checklistId: string): void
 }
 
 export function useHistory(phone: string): History {
   const { api } = usePorts()
   const [checklists, setChecklists] = useState<ChecklistRecord[]>([])
-  const [serviceNames, setServiceNames] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<LocalText | null>(null)
   const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     let cancelled = false // ignore a late answer after the page was left or reloaded
     setLoading(true)
     setError(null)
-    Promise.all([api.getHistory(phone), api.listServices().catch(() => [])])
-      .then(([history, services]) => {
-        if (cancelled) return
-        setChecklists(history.checklists)
-        setServiceNames(Object.fromEntries(services.map((s) => [s.id, s.name_bn])))
+    api
+      .getHistory(phone)
+      .then((history) => {
+        if (!cancelled) setChecklists(history.checklists)
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof ApiError ? err.messageBn : MSG.ERROR)
+        if (!cancelled) setError(errorText(err))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -46,6 +44,10 @@ export function useHistory(phone: string): History {
   }, [api, phone, attempt])
 
   const reload = useCallback(() => setAttempt((n) => n + 1), [])
+  const forget = useCallback(
+    (checklistId: string) => setChecklists((list) => list.filter((r) => r.id !== checklistId)),
+    [],
+  )
 
-  return { checklists, serviceNames, loading, error, reload }
+  return { checklists, loading, error, reload, forget }
 }
