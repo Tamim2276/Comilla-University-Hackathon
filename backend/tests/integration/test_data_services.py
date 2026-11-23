@@ -1,10 +1,10 @@
 """The data services from docker-compose.yml: Chroma server mode and Postgres.
 
 The first tests need nothing running. The live ones run only when the services are up
-(`docker compose up -d`) and skip otherwise, e.g. in CI:
+(`docker compose up -d` in backend/) and skip otherwise, e.g. in CI:
 - Chroma: the server on localhost:8001,
 - Postgres: set EKCALL_TEST_DATABASE_URL to a database the test may fill, never the real one, e.g.
-  postgresql+psycopg://ekcall:<password>@localhost:5432/ekcall_test
+  postgresql+psycopg://<POSTGRES_USER>:<POSTGRES_PASSWORD>@localhost:5432/ekcall_test
 """
 
 import os

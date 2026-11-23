@@ -1,12 +1,13 @@
 # Data services for Ek Call: Postgres (history, logs, answer cache) and Chroma (document search).
 # The backend and the app still run on the machine for now; they reach these on localhost.
 #
+# Run from backend/:
 #   docker compose up -d        start (data stays in the named volumes between restarts)
 #   docker compose ps           both should say "healthy"
 #   docker compose down         stop (add -v ONLY to delete all data)
 #
-# The Postgres password comes from the file .env next to this one (not in git, see .env.example).
-# Ports listen on 127.0.0.1 only, so other machines on the network cannot reach the databases.
+# POSTGRES_USER, POSTGRES_PASSWORD and POSTGRES_DB come from backend/.env (Compose reads the .env next to
+# this file; see .env.example). Ports listen on 127.0.0.1 only, so other machines cannot reach them.
 
 name: ekcall
 
@@ -15,21 +16,21 @@ services:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ekcall
-      POSTGRES_USER: ekcall
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (see .env.example)}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in backend/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in backend/.env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in backend/.env}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ekcall -d ekcall"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 5s
       timeout: 3s
       retries: 10
 
   chroma:
-    # Must match chromadb in backend/requirements.txt: the client refuses a different server version.
+    # Must match chromadb in requirements.txt: the client refuses a different server version.
     image: chromadb/chroma:1.5.9
     restart: unless-stopped
     environment:
