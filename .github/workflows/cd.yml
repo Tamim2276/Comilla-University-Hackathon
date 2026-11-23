@@ -1,9 +1,5 @@
-# CD: after CI passes on main, our own server (a self-hosted GitHub runner) runs deploy/deploy.sh:
-# it updates ~/Desktop/Comilla-University-Hackathon to main, rebuilds the backend image and restarts
-# it with Docker Compose. See docs/deploy.md.
-#
-# Safety: this job runs on our machine, so it only ever runs for pushes to main in this repository
-# (never for pull requests or forks) and the server keeps its own .env; no secrets live in GitHub.
+# CD: after CI passes on main, GitHub-hosted runner connects to
+# our Azure VM through SSH and executes deploy/deploy.sh.
 
 name: CD
 
@@ -12,31 +8,58 @@ on:
     workflows: [CI]
     types: [completed]
     branches: [main]
-  workflow_dispatch: # "Run workflow" button: redeploy main by hand
+
+  workflow_dispatch:
 
 concurrency:
   group: deploy
-  cancel-in-progress: false # never stop a deploy halfway
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
   deploy:
-    name: Deploy to the server
+    name: Deploy to Azure VM
+
     if: >-
       github.repository == 'Tamim2276/Comilla-University-Hackathon' &&
       (github.event_name == 'workflow_dispatch' ||
        (github.event.workflow_run.conclusion == 'success' &&
         github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main' &&
         github.event.workflow_run.head_repository.full_name == github.repository))
-    runs-on: [self-hosted, linux, ekcall]
+
+    runs-on: ubuntu-latest
     timeout-minutes: 40
+
     steps:
-      # Only to get deploy.sh itself; the script deploys from the project folder on the server.
-      - uses: actions/checkout@v4
+      # Get the deployment script from the commit that triggered CI.
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
+      # Configure SSH using Azure's PEM private key.
+      - name: Configure SSH
+        env:
+          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          printf '%s\n' "$VM_SSH_KEY" > ~/.ssh/azure_key
+          chmod 600 ~/.ssh/azure_key
+
+      # Execute deploy.sh remotely on Azure VM.
       - name: Deploy
-        run: bash deploy/deploy.sh # bash: works even if the file lost its executable bit
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_USER: ${{ secrets.VM_USER }}
+        run: |
+          ssh \
+            -i ~/.ssh/azure_key \
+            -o StrictHostKeyChecking=accept-new \
+            -o BatchMode=yes \
+            "$VM_USER@$VM_HOST" \
+            'bash -s' < deploy/deploy.sh
