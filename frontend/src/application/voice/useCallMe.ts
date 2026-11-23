@@ -42,10 +42,6 @@ export function useCallMe(api: VoiceApi, phone: string, fallbackErrorBn: string)
     return () => clearInterval(timer)
   }, [readyAt])
 
-  useEffect(() => {
-    if (state === 'called' && waitS === 0) setState('idle')
-  }, [state, waitS])
-
   const call = useCallback(() => {
     if (state === 'calling' || waitS > 0 || !phone) return
     setState('calling')
@@ -70,5 +66,7 @@ export function useCallMe(api: VoiceApi, phone: string, fallbackErrorBn: string)
     )
   }, [api, phone, state, waitS, fallbackErrorBn])
 
-  return { state, waitS, errorBn, call }
+  // "Call placed" turns back into "ready" when the rest time is over (derived, no extra render).
+  const shown: CallMeState = state === 'called' && waitS === 0 ? 'idle' : state
+  return { state: shown, waitS, errorBn, call }
 }

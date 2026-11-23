@@ -22,6 +22,9 @@ but **no BanglaBERT model on this laptop, so the router was TF-IDF**. After `scr
    about S2 and S4, so each one costs one extra Gemini call and **is never cached** (FR-AGT-15 caches only sure
    routes). S2 took 29 s. Copy the model folder to the laptop that runs the demo, then run
    `python -m scripts.prewarm --voice` again and check that every demo question says "stored".
+   **Done on Ragib's laptop (22 Nov):** model folder copied, `pip install git+https://github.com/csebuetnlp/normalizer`
+   (needed, see `docs/SETUP.md`), all 8 demo questions "sure" (0.83 to 0.94, about 45 ms each) and cached
+   for app and voice. S7 stays unsure (0.65), so it goes to the LLM and gets the fallback, as intended.
 2. **"Fee" is "তথ্য পাওয়া যায়নি" for old age and widow allowance (Tamim).** The SRS S1 expects "free". The
    documents in `data/raw_docs/old_age_allowance/` never say the application is free, so the answer
    cannot say it. Either add an official source that says so, or change the S1 expectation in the SRS.
