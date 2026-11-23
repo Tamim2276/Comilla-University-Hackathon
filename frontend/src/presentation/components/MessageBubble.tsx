@@ -2,7 +2,7 @@
 // An answer shows (SRS 3.3): service tag, the spoken-style answer, the checklist card, the sources.
 
 import { useEffect, useState } from 'react'
-import { UI } from '../../domain/messages'
+import { useLanguage } from '../../application/languageContext'
 import type { ChatMessage, ChatResponse } from '../../domain/types'
 import { ChecklistCard } from './ChecklistCard'
 import { RichText } from './RichText'
@@ -17,12 +17,15 @@ function titleLine(displayText: string): string {
 }
 
 function AnswerBubble({ answer }: { answer: ChatResponse }) {
+  const { lang, t } = useLanguage()
   if (answer.status === 'follow_up') {
     // The agent needs one more detail before it can answer; the user simply replies below.
     return (
       <div className="rounded-2xl rounded-tl-sm border-2 border-bd-red bg-bd-red-soft p-4">
-        <p className="mb-1 text-base font-bold text-bd-red-dark">{UI.followUpLabel}</p>
-        <p className="text-lg font-bold">{answer.follow_up_question || answer.display_text}</p>
+        <p className="mb-1 text-base font-bold text-bd-red-dark">{t.followUpLabel}</p>
+        <p lang="bn" className="text-lg font-bold">
+          {answer.follow_up_question || answer.display_text}
+        </p>
         <div className="mt-2">
           <PlayAnswerButton text={answer.speech_text} />
         </div>
@@ -36,9 +39,13 @@ function AnswerBubble({ answer }: { answer: ChatResponse }) {
       className={`rounded-2xl rounded-tl-sm bg-white p-4 shadow-sm ${isFallback ? 'border-2 border-gray-300' : ''}`}
     >
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        {answer.service && !isFallback && <ServiceTag name={answer.service.name_bn} />}
-        {isFallback && <span className="text-sm font-bold text-gray-600">{UI.fallbackLabel}</span>}
+        {answer.service && !isFallback && (
+          <ServiceTag name={lang === 'en' ? answer.service.name_en : answer.service.name_bn} />
+        )}
+        {isFallback && <span className="text-sm font-bold text-gray-600">{t.fallbackLabel}</span>}
       </div>
+      {/* The answer itself comes from the Bangla official documents, in every interface language. */}
+      <div lang="bn">
       {answer.checklist ? (
         // The checklist card already lists the details, so only the title line of display_text
         // (it also carries the stub's "sample answer" label) and the short spoken answer go on top.
@@ -49,6 +56,7 @@ function AnswerBubble({ answer }: { answer: ChatResponse }) {
       ) : (
         <RichText text={answer.display_text || answer.speech_text} />
       )}
+      </div>
       <div className="mt-2">
         <PlayAnswerButton text={answer.speech_text} />
       </div>
@@ -67,11 +75,12 @@ function AnswerBubble({ answer }: { answer: ChatResponse }) {
 }
 
 export function MessageBubble({ message }: { message: ChatMessage }) {
+  const { t, pick } = useLanguage()
   if (message.role === 'user') {
     return (
       <div className="flex justify-end">
         <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-bd-green px-4 py-3 text-white break-words">
-          <span className="sr-only">{UI.you}: </span>
+          <span className="sr-only">{t.you}: </span>
           {message.text}
         </div>
       </div>
@@ -82,7 +91,7 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
     return (
       <div className="flex justify-start" role="alert">
         <div className="max-w-[90%] rounded-2xl rounded-tl-sm border-2 border-bd-red-dark bg-bd-red-soft px-4 py-3 text-bd-red-dark">
-          {message.text}
+          {pick(message.text)}
         </div>
       </div>
     )
@@ -101,6 +110,7 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
 const SLOW_AFTER_MS = 8_000
 
 export function ThinkingBubble() {
+  const { t } = useLanguage()
   const [slow, setSlow] = useState(false)
   useEffect(() => {
     const timer = window.setTimeout(() => setSlow(true), SLOW_AFTER_MS)
@@ -115,7 +125,7 @@ export function ThinkingBubble() {
           <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-bd-green [animation-delay:-0.15s]" />
           <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-bd-red" />
         </span>
-        <span className="text-gray-600">{slow ? UI.thinkingSlow : UI.thinking}</span>
+        <span className="text-gray-600">{slow ? t.thinkingSlow : t.thinking}</span>
       </div>
     </div>
   )

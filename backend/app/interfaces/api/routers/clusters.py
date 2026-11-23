@@ -1,29 +1,21 @@
 """POST /api/v1/admin/clusters/rebuild and GET /api/v1/admin/clusters (D2-T2, FR-ADM-03, 04, 05, SRS 8).
 
-Both need the `X-Admin-Token` header when ADMIN_TOKEN is set. The check below behaves like the
-shared `require_admin_token` that D2-R1 adds to admin.py; once that exists, this file imports it
-instead (one line), so both admin routers use the same check.
+Both use the shared admin check `require_admin_token` from admin.py (session token or X-Admin-Token).
 """
 
-import hmac
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 from app.application.ports.clustering import Cluster
 from app.application.use_cases.clusters import ListClusters, RebuildClusters
 from app.interfaces.api.deps import get_container
+from app.interfaces.api.routers.admin import no_store, require_admin_token
 
-
-def require_admin_token(request: Request, x_admin_token: Annotated[str | None, Header()] = None) -> None:
-    """No ADMIN_TOKEN configured -> open (development); otherwise the header must match (FR-ADM-05)."""
-    expected = get_container(request).settings.admin_token.get_secret_value()
-    if expected and not hmac.compare_digest(x_admin_token or "", expected):
-        raise HTTPException(status_code=401, detail="Admin token missing or wrong.")
-
-
-router = APIRouter(prefix="/api/v1/admin", tags=["admin"], dependencies=[Depends(require_admin_token)])
+router = APIRouter(
+    prefix="/api/v1/admin", tags=["admin"], dependencies=[Depends(require_admin_token), Depends(no_store)]
+)
 
 
 class RebuildResponse(BaseModel):

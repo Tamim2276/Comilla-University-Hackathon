@@ -1,9 +1,11 @@
 // The checklist of an answer: who, papers, fee, where, decision (FR-APP-02, SRS 3.3).
-// Fields the official documents do not state arrive as "তথ্য পাওয়া যায়নি" and are shown as they are,
-// in grey. Long values (several fee amounts, long paper lists) wrap instead of overflowing.
+// Fields the official documents do not state arrive as "তথ্য পাওয়া যায়নি" and are shown in grey,
+// in the interface language. The values themselves come from Bangla documents and stay Bangla.
+// Long values wrap; a fee with several tiers ("১ম বার: ...; ২য় বার: ...") shows one tier per line.
 
 import type { ReactNode } from 'react'
-import { UI, UNKNOWN_FIELD } from '../../domain/messages'
+import { useLanguage } from '../../application/languageContext'
+import { UNKNOWN_FIELD } from '../../domain/messages'
 import type { Checklist } from '../../domain/types'
 
 function isUnknown(value: string): boolean {
@@ -28,7 +30,21 @@ function Row({ icon, label, children }: { icon: ReactNode; label: string; childr
 }
 
 function Value({ text }: { text: string }) {
-  return isUnknown(text) ? <span className="text-gray-500">{UNKNOWN_FIELD}</span> : <>{text}</>
+  const { t } = useLanguage()
+  return isUnknown(text) ? <span className="text-gray-500">{t.unknownField}</span> : <span lang="bn">{text}</span>
+}
+
+/** A fee with several tiers shows one tier per line; a plain fee stays one line. */
+function FeeValue({ text }: { text: string }) {
+  const tiers = text.split(';').map((tier) => tier.trim()).filter(Boolean)
+  if (isUnknown(text) || tiers.length < 2) return <Value text={text} />
+  return (
+    <ul lang="bn" className="space-y-0.5">
+      {tiers.map((tier, i) => (
+        <li key={i}>{tier}</li>
+      ))}
+    </ul>
+  )
 }
 
 // Small line icons (24x24, stroke = currentColor), so no icon package is needed.
@@ -46,32 +62,33 @@ const ICONS = {
 }
 
 export function ChecklistCard({ checklist }: { checklist: Checklist }) {
+  const { t } = useLanguage()
   const papers = checklist.papers.filter((p) => !isUnknown(p))
   return (
     <section className="rounded-xl border border-bd-green/20 bg-bd-green-soft p-3">
-      <h3 className="mb-1 text-base font-bold text-bd-green">{UI.checklistTitle}</h3>
+      <h3 className="mb-1 text-base font-bold text-bd-green">{t.checklistTitle}</h3>
       <dl className="divide-y divide-bd-green/10">
-        <Row icon={ICONS.who} label={UI.checklistWho}>
+        <Row icon={ICONS.who} label={t.checklistWho}>
           <Value text={checklist.who} />
         </Row>
-        <Row icon={ICONS.papers} label={UI.checklistPapers}>
+        <Row icon={ICONS.papers} label={t.checklistPapers}>
           {papers.length === 0 ? (
             <Value text="" />
           ) : (
-            <ul className="ml-5 list-disc space-y-0.5">
+            <ul lang="bn" className="ml-5 list-disc space-y-0.5">
               {papers.map((p, i) => (
                 <li key={i}>{p}</li>
               ))}
             </ul>
           )}
         </Row>
-        <Row icon={ICONS.fee} label={UI.checklistFee}>
-          <Value text={checklist.fee} />
+        <Row icon={ICONS.fee} label={t.checklistFee}>
+          <FeeValue text={checklist.fee} />
         </Row>
-        <Row icon={ICONS.where} label={UI.checklistWhere}>
+        <Row icon={ICONS.where} label={t.checklistWhere}>
           <Value text={checklist.where} />
         </Row>
-        <Row icon={ICONS.decision} label={UI.checklistDecision}>
+        <Row icon={ICONS.decision} label={t.checklistDecision}>
           <Value text={checklist.decision} />
         </Row>
       </dl>

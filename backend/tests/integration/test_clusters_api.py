@@ -70,7 +70,9 @@ def app_client(admin_token: str = "") -> Iterator[TestClient]:
 
 @pytest.fixture
 def client() -> Iterator[TestClient]:
-    yield from app_client()
+    for c in app_client(admin_token="test-admin-password"):  # admin is closed without a password
+        c.headers["X-Admin-Token"] = "test-admin-password"
+        yield c
 
 
 def test_rebuild_then_list(client: TestClient) -> None:

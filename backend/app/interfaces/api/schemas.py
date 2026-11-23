@@ -117,6 +117,7 @@ class MessageOut(BaseModel):
 
 
 class ChecklistRecordOut(BaseModel):
+    id: str | None = None  # for DELETE /api/v1/conversations/{phone}/checklists/{id}
     service_id: str
     checklist: ChecklistOut
     citations: list[CitationOut]
@@ -126,7 +127,7 @@ class ChecklistRecordOut(BaseModel):
     @classmethod
     def of(cls, r: ChecklistRecord) -> "ChecklistRecordOut":
         return cls(
-            service_id=r.checklist.service_id, checklist=ChecklistOut.of(r.checklist),
+            id=r.id, service_id=r.checklist.service_id, checklist=ChecklistOut.of(r.checklist),
             citations=[CitationOut.of(c) for c in r.citations], sms_sent=r.sms_sent, created_at=r.created_at,
         )  # fmt: skip
 

@@ -1,20 +1,41 @@
-// Numbers and dates in Bangla digits for the screens (e.g. 1234 -> ১,২৩৪).
+// Numbers and dates for the screens: Bangla digits in Bangla (১,২৩৪), normal digits in English (1,234).
 
-const number = new Intl.NumberFormat('bn-BD')
-const oneDecimal = new Intl.NumberFormat('bn-BD', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-const dateTime = new Intl.DateTimeFormat('bn-BD', { dateStyle: 'medium', timeStyle: 'short' })
-const time = new Intl.DateTimeFormat('bn-BD', { timeStyle: 'medium' })
+import { useLanguage } from '../application/languageContext'
+import type { Language } from '../domain/messages'
 
-export const bnNumber = (n: number): string => number.format(n)
-
-export const bnPercent = (n: number): string => `${oneDecimal.format(n)}%`
-
-/** 3210 ms -> "৩.২" (seconds, one decimal). */
-export const bnSeconds = (ms: number): string => oneDecimal.format(ms / 1000)
-
-export function bnDateTime(iso: string): string {
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? '' : dateTime.format(d)
+export interface Format {
+  number(n: number): string
+  percent(n: number): string
+  /** 3210 ms -> "৩.২" / "3.2" (seconds, one decimal). */
+  seconds(ms: number): string
+  dateTime(iso: string): string
+  time(d: Date): string
 }
 
-export const bnTime = (d: Date): string => time.format(d)
+function makeFormat(locale: string): Format {
+  const number = new Intl.NumberFormat(locale)
+  const oneDecimal = new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+  const dateTime = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' })
+  const time = new Intl.DateTimeFormat(locale, { timeStyle: 'medium' })
+  return {
+    number: (n) => number.format(n),
+    percent: (n) => `${oneDecimal.format(n)}%`,
+    seconds: (ms) => oneDecimal.format(ms / 1000),
+    dateTime: (iso) => {
+      const d = new Date(iso)
+      return Number.isNaN(d.getTime()) ? '' : dateTime.format(d)
+    },
+    time: (d) => time.format(d),
+  }
+}
+
+const FORMATS: Record<Language, Format> = { bn: makeFormat('bn-BD'), en: makeFormat('en-GB') }
+
+export function formatFor(lang: Language): Format {
+  return FORMATS[lang]
+}
+
+/** The formatters of the current language. */
+export function useFormat(): Format {
+  return FORMATS[useLanguage().lang]
+}

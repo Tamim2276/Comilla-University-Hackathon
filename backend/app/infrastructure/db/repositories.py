@@ -140,6 +140,7 @@ class SqlChecklistRepo:
                     sms_sent=r.sms_sent,
                     call_sid=r.call_sid,
                     created_at=r.created_at,
+                    id=str(r.id),
                 )
                 for r in rows
             ]
@@ -149,6 +150,18 @@ class SqlChecklistRepo:
             result = s.execute(delete(ChecklistRow).where(ChecklistRow.phone == phone.e164))
             s.commit()
             return int(result.rowcount or 0)  # type: ignore[attr-defined]
+
+    def delete_one(self, phone: PhoneNumber, checklist_id: str) -> bool:
+        if not checklist_id.isdigit():
+            return False
+        with self._sessions() as s:
+            result = s.execute(
+                delete(ChecklistRow).where(
+                    ChecklistRow.id == int(checklist_id), ChecklistRow.phone == phone.e164
+                )
+            )
+            s.commit()
+            return bool(result.rowcount)  # type: ignore[attr-defined]
 
 
 class SqlQuestionLogRepo:
