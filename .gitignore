@@ -28,3 +28,6 @@ backend/data/models/*
 # OS
 .DS_Store
 Thumbs.db
+
+# training logs (sprint T1B)
+backend/logs/

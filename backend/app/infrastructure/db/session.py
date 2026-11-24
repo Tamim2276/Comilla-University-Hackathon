@@ -20,9 +20,7 @@ def make_engine(database_url: str) -> Engine:
 
     if database_url in _IN_MEMORY:
         # One shared connection, so every session sees the same in-memory database (tests).
-        engine = create_engine(
-            database_url, connect_args={"check_same_thread": False}, poolclass=StaticPool
-        )
+        engine = create_engine(database_url, connect_args={"check_same_thread": False}, poolclass=StaticPool)
     else:
         if url.database:
             Path(url.database).parent.mkdir(parents=True, exist_ok=True)

@@ -30,6 +30,7 @@ class RouterSource(StrEnum):
     TFIDF = "tfidf"
     LLM = "llm"
     CONTEXT = "context"
+    SITUATION = "situation"  # decided by the `understand` step (FR-AGT-19)
 
 
 # Bangladeshi mobile in E.164: +880 1 [3-9] + 8 more digits (SRS 6.1).

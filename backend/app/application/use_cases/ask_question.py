@@ -4,6 +4,7 @@ history -> engine -> save messages, checklist and an anonymous log -> (voice onl
 
 SMS rules (D1-A4):
 - only for a voice call (it has a call SID), only for an `answered` result with a checklist;
+- a two-service answer gets one checklist row and one SMS per service (sprint W1, FR-AGT-21);
 - at most one SMS per service per call (FR-SMS-02): the checklist is saved with sms_sent=True
   BEFORE the send is queued, so a slow or failed send can never lead to a second SMS;
 - the send runs on the BackgroundRunner and never delays the spoken answer (FR-SMS-04);
@@ -25,6 +26,7 @@ from app.application.privacy import hash_phone
 from app.domain.entities import Answer, Checklist, Message, QuestionLog, Service
 from app.domain.errors import DomainError
 from app.domain.policies import HISTORY_MESSAGES_TO_LOAD
+from app.domain.service_set import ServiceSet
 from app.domain.value_objects import AnswerStatus, Channel, PhoneNumber, Role
 
 log = logging.getLogger(__name__)
@@ -79,19 +81,21 @@ class AskQuestion:
             conversation_id,
             Message(
                 role=Role.ASSISTANT, channel=channel, text=reply,
-                service_id=answer.service_id, status=answer.status,
+                service_id=_stored_service(answer), status=answer.status,
             ),  # fmt: skip
             call_sid,
         )
-        send_sms = False
-        if answer.status is AnswerStatus.ANSWERED and answer.checklist is not None:
-            send_sms = self._sms_due(channel, call_sid, answer.checklist)
-            # Saving with sms_sent=True is the "mark first" of FR-SMS-02.
-            self._checklists.save(
-                number, answer.checklist, answer.citations, sms_sent=send_sms, call_sid=call_sid
-            )
-            if send_sms:
-                self._queue_sms(number, answer.checklist)
+        sms_services: list[str] = []
+        if answer.status is AnswerStatus.ANSWERED:
+            for checklist in _checklists(answer):  # one per service (FR-AGT-21)
+                send_sms = self._sms_due(channel, call_sid, checklist)
+                # Saving with sms_sent=True is the "mark first" of FR-SMS-02.
+                self._checklists.save(
+                    number, checklist, answer.citations, sms_sent=send_sms, call_sid=call_sid
+                )
+                if send_sms:
+                    sms_services.append(checklist.service_id)
+                    self._queue_sms(number, checklist)
         self._log(number, channel, question, answer, latency_ms)
         log.info(
             "answered status=%s service=%s latency_ms=%d llm_calls=%d channel=%s",
@@ -99,7 +103,12 @@ class AskQuestion:
         )  # fmt: skip
 
         service = self._services.get(answer.service_id) if answer.service_id else None
-        return AskResult(conversation_id, answer, service, latency_ms, sms_scheduled=send_sms)
+        ids = answer.service_ids or ((answer.service_id,) if answer.service_id else ())
+        services = tuple(self._services[i] for i in ids if i in self._services)
+        return AskResult(
+            conversation_id, answer, service, latency_ms,
+            sms_scheduled=bool(sms_services), sms_services=tuple(sms_services), services=services,
+        )  # fmt: skip
 
     def _sms_due(self, channel: Channel, call_sid: str | None, checklist: Checklist) -> bool:
         """True when this answer is the first one about its service in this call (FR-SMS-01, 02)."""
@@ -153,6 +162,20 @@ class AskQuestion:
                 llm_backend=answer.llm_backend if answer else None,
             )
         )
+
+
+def _checklists(answer: Answer) -> tuple[Checklist, ...]:
+    """Every checklist of the answer; old single answers only fill `checklist`."""
+    if answer.checklists:
+        return answer.checklists
+    return (answer.checklist,) if answer.checklist is not None else ()
+
+
+def _stored_service(answer: Answer) -> str | None:
+    """Two services are kept as "a,b" so a pending follow-up keeps both (no DB migration)."""
+    if len(answer.service_ids) > 1:
+        return ServiceSet.format(answer.service_ids)
+    return answer.service_id
 
 
 def _ms_since(started: float) -> int:

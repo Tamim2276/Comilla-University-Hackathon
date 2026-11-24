@@ -20,6 +20,7 @@ class Service:
     name_en: str
     office_bn: str
     sms_name: str
+    search_terms_bn: str = ""  # the official documents' own words, for query expansion (FR-AGT-20)
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,37 @@ class Checklist:
 
 
 @dataclass(frozen=True)
+class SituationProfile:
+    """What the caller told us about their life (FR-AGT-19). Facts are only what was said."""
+
+    summary_bn: str
+    facts: tuple[tuple[str, str], ...] = ()
+
+
+@dataclass(frozen=True)
+class ConflictSide:
+    """One service's rule on a point where two services differ, with its own source (FR-AGT-22)."""
+
+    service_id: str
+    rule_bn: str
+    chunk_id: str
+    source_title: str = ""
+    source_url: str = ""
+
+
+@dataclass(frozen=True)
+class Conflict:
+    """Two services' documents say different things on the same topic. No side is the winner."""
+
+    topic_bn: str
+    sides: tuple[ConflictSide, ...]
+
+
+SINGLE_MODE = "single"
+MULTI_MODE = "multi"
+
+
+@dataclass(frozen=True)
 class Answer:
     """The agent's full reply to one question, used by every channel."""
 
@@ -60,6 +92,12 @@ class Answer:
     timings: Mapping[str, float] = field(default_factory=dict)
     llm_calls: int = 0
     llm_backend: str | None = None  # FR-AGT-18
+    # Multi-service answers (FR-AGT-21, 22). `service_id` / `checklist` stay = the primary service.
+    service_ids: tuple[str, ...] = ()
+    checklists: tuple[Checklist, ...] = ()
+    conflicts: tuple[Conflict, ...] = ()
+    situation: SituationProfile | None = None
+    mode: str = SINGLE_MODE
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.confidence <= 1.0:
@@ -68,6 +106,8 @@ class Answer:
             # FR-AGT-12: every answered response has a service, a checklist and sources.
             if not self.service_id or self.checklist is None or not self.citations:
                 raise ValueError("an answered Answer needs service_id, checklist and at least one citation")
+        if self.mode not in (SINGLE_MODE, MULTI_MODE):
+            raise ValueError(f"mode must be single or multi, got {self.mode!r}")
         if self.status is AnswerStatus.FOLLOW_UP and not self.follow_up_question:
             raise ValueError("a follow_up Answer needs follow_up_question")
 

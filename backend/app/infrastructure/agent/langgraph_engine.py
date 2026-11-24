@@ -42,10 +42,12 @@ class LangGraphAnswerEngine:
             routing.CLASSIFY: steps.classify,
             routing.CACHE_LOOKUP: steps.cache_lookup,
             routing.LLM_CLASSIFY: steps.llm_classify,
+            routing.UNDERSTAND: steps.understand,
             routing.RETRIEVE: steps.retrieve,
             routing.GRADE: steps.grade,
             routing.REWRITE_QUERY: steps.rewrite_query,
             routing.GENERATE: steps.generate,
+            routing.GUARD: steps.guard,
             routing.VERIFY: steps.verify,
             routing.FINALIZE: steps.finalize,
             routing.FINALIZE_FOLLOW_UP: steps.finalize_follow_up,
@@ -55,12 +57,26 @@ class LangGraphAnswerEngine:
             graph.add_node(name, self._timed(name, step))
 
         threshold, retries = self._deps.confidence_threshold, self._deps.max_retries
+        situation = routing.SituationRouting(
+            self._deps.situation_mode, self._deps.multi_service_min_prob, self._deps.hint_min_confidence
+        )
         retry_targets = [routing.REWRITE_QUERY, routing.FALLBACK]
         graph.add_edge(START, routing.CLASSIFY)
         graph.add_conditional_edges(
             routing.CLASSIFY,
-            lambda state: routing.after_classify(state, threshold),
-            [routing.CACHE_LOOKUP, routing.RETRIEVE, routing.LLM_CLASSIFY, routing.FALLBACK],
+            lambda state: routing.after_classify(state, threshold, situation),
+            [
+                routing.CACHE_LOOKUP,
+                routing.RETRIEVE,
+                routing.LLM_CLASSIFY,
+                routing.UNDERSTAND,
+                routing.FALLBACK,
+            ],
+        )
+        graph.add_conditional_edges(
+            routing.UNDERSTAND,
+            routing.after_understand,
+            [routing.RETRIEVE, routing.FINALIZE_FOLLOW_UP, routing.FALLBACK],
         )
         graph.add_conditional_edges(
             routing.CACHE_LOOKUP,
@@ -84,7 +100,16 @@ class LangGraphAnswerEngine:
         graph.add_conditional_edges(
             routing.GENERATE,
             lambda state: routing.after_generate(state, retries),
-            [routing.VERIFY, routing.FINALIZE_FOLLOW_UP, *retry_targets],
+            {  # every draft passes grounding_guard before verify (FR-AGT-22)
+                routing.VERIFY: routing.GUARD,
+                routing.FINALIZE_FOLLOW_UP: routing.FINALIZE_FOLLOW_UP,
+                **{target: target for target in retry_targets},
+            },
+        )
+        graph.add_conditional_edges(
+            routing.GUARD,
+            lambda state: routing.after_guard(state, retries),
+            [routing.VERIFY, *retry_targets],
         )
         graph.add_conditional_edges(
             routing.VERIFY,

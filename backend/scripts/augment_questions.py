@@ -4,6 +4,10 @@ Run from backend/:
     python -m scripts.augment_questions                    # uses LLM_BACKEND from .env
     python -m scripts.augment_questions --backend ollama   # saves Gemini quota
     python -m scripts.augment_questions --fresh            # ignore saved LLM answers
+    python -m scripts.augment_questions --input situation_seed.csv --check-leak
+        # sprint T1: augment the situational seeds, append them to train.csv / val.csv and write
+        # train_v2.csv / val_v2.csv (the old files stay), then run the leak check
+    python -m scripts.augment_questions --check-leak-only  # only the leak check on the v2 files
 
 Steps:
 1. Split the seeds 90/10 into train and val **by seed** (per label), before any paraphrasing,
@@ -13,6 +17,9 @@ Steps:
 3. Drop variants with letters from other scripts, duplicates, and anything that equals a
    test.csv question (test.csv stays untouched).
 4. Write data/questions/train.csv and val.csv (`text,label`), seeds included.
+
+Leak check (FR-DATA-10): no line of the hand-written test sets (LEAK_PROTECTED) may appear in
+train_v2.csv / val_v2.csv. The check exits with an error and prints the lines if any match.
 
 LLM answers are saved in data/models/augment_cache.json (git-ignored), so a failed run
 continues where it stopped instead of paying for the same calls again.
@@ -40,6 +47,9 @@ VARIANTS_PER_SEED = 8
 SEEDS_PER_CALL = 5
 VAL_SHARE = 0.10
 RANDOM_SEED = 42
+# Hand-written evaluation sets: never in training data (sprint T1, Appendix C).
+LEAK_PROTECTED = ("test.csv", "situation_test.csv", "mixed_test.csv", "situation_check.csv")
+V2_FILES = ("train_v2.csv", "val_v2.csv")
 # Bangla letters, English letters, digits, spaces, common punctuation, danda, zero-width joiners.
 _ALLOWED = re.compile(r"^[ঀ-৿।॥‌‍ -~\s]+$")
 
@@ -166,6 +176,44 @@ def build_rows(
     return rows
 
 
+def leak_key(text: str) -> str:
+    """Exact match after trimming spaces and `।?` (the plan's rule), Unicode-normalised."""
+    return unicodedata.normalize("NFC", " ".join(text.split())).strip(" ।?")
+
+
+def protected_keys(questions_dir: Path) -> dict[str, str]:
+    """leak_key -> file name, for every line of the hand-written evaluation sets."""
+    keys: dict[str, str] = {}
+    for name in LEAK_PROTECTED:
+        path = questions_dir / name
+        if path.exists():
+            for row in read_rows(path):
+                keys[leak_key(row["text"])] = name
+    return keys
+
+
+def find_leaks(rows: list[dict[str, str]], protected: dict[str, str]) -> list[tuple[str, str]]:
+    """(training text, the evaluation file it comes from) for every overlapping line."""
+    return [
+        (row["text"], protected[leak_key(row["text"])]) for row in rows if leak_key(row["text"]) in protected
+    ]
+
+
+def check_leak(questions_dir: Path) -> int:
+    protected = protected_keys(questions_dir)
+    leaks: list[tuple[str, str]] = []
+    for name in V2_FILES:
+        path = questions_dir / name
+        if not path.exists():
+            print(f"leak check: {name} not found")
+            return 1
+        leaks += [(f"{name}: {text}", source) for text, source in find_leaks(read_rows(path), protected)]
+    for text, source in leaks:
+        print(f"  LEAK ({source}) {text}")
+    print(f"leak check: {len(leaks)} overlaps ({len(protected)} protected lines)")
+    return 1 if leaks else 0
+
+
 def write_rows(path: Path, rows: list[dict[str, str]]) -> None:
     with path.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["text", "label"])
@@ -177,8 +225,16 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--backend", choices=["gemini", "ollama", "hybrid"], default=None)
     parser.add_argument("--fresh", action="store_true", help="ignore saved LLM answers")
+    parser.add_argument("--input", help="seed file in data/questions; appends to train/val as *_v2.csv")
+    parser.add_argument("--check-leak", action="store_true", help="run the leak check after writing")
+    parser.add_argument("--check-leak-only", action="store_true", help="only check the *_v2.csv files")
     args = parser.parse_args()
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+    if args.check_leak_only:
+        return check_leak(QUESTIONS_DIR)
+    if args.input:
+        code = augment_extra(args.input, args.backend, args.fresh)
+        return check_leak(QUESTIONS_DIR) or code if args.check_leak else code
 
     settings = Settings(**({"llm_backend": args.backend} if args.backend else {}))  # type: ignore[arg-type]
     llm = Container(settings).llm
@@ -203,6 +259,44 @@ def main() -> int:
     for row in train_rows:
         per_label[row["label"]] += 1
     print("train rows per label: " + ", ".join(f"{k} {v}" for k, v in sorted(per_label.items())))
+    if missing or failures:
+        print(f"WARNING: {len(missing)} seeds have no variants yet ({failures} failed calls). Run again.")
+        return 1
+    return 0
+
+
+def augment_extra(seed_name: str, backend: str | None, fresh: bool) -> int:
+    """Sprint T1: augment extra seeds and write train_v2.csv / val_v2.csv = old rows + new rows."""
+    settings = Settings(**({"llm_backend": backend} if backend else {}))  # type: ignore[arg-type]
+    llm = Container(settings).llm
+    seeds = read_rows(QUESTIONS_DIR / seed_name)
+    train_seeds, val_seeds = split_seeds(seeds)
+    print(f"LLM_BACKEND = {settings.llm_backend}")
+    print(
+        f"{seed_name}: {len(seeds)} seeds -> train {len(train_seeds)}, val {len(val_seeds)} (split by seed)"
+    )
+    cache = load_cache(fresh)
+    failures = augment(llm, train_seeds + val_seeds, cache)
+
+    old_train = read_rows(QUESTIONS_DIR / "train.csv")
+    old_val = read_rows(QUESTIONS_DIR / "val.csv")
+    # Evaluation sets are blocked (never trained on), and so is every line already in the old files.
+    blocked = {norm_key(t) for t in protected_keys(QUESTIONS_DIR)}
+    blocked |= {norm_key(r["text"]) for r in old_train + old_val}
+    val_rows = build_rows(val_seeds, cache, blocked=blocked)
+    train_rows = build_rows(train_seeds, cache, blocked=blocked | {norm_key(r["text"]) for r in val_rows})
+    write_rows(QUESTIONS_DIR / "train_v2.csv", old_train + train_rows)
+    write_rows(QUESTIONS_DIR / "val_v2.csv", old_val + val_rows)
+
+    print(
+        f"train_v2.csv: {len(old_train)} + {len(train_rows)} rows, "
+        f"val_v2.csv: {len(old_val)} + {len(val_rows)} rows"
+    )
+    per_label: dict[str, int] = defaultdict(int)
+    for row in train_rows + val_rows:
+        per_label[row["label"]] += 1
+    print("situational rows per label: " + ", ".join(f"{k} {v}" for k, v in sorted(per_label.items())))
+    missing = [row["text"] for row in seeds if not cache.get(row["text"])]
     if missing or failures:
         print(f"WARNING: {len(missing)} seeds have no variants yet ({failures} failed calls). Run again.")
         return 1

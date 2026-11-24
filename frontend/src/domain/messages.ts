@@ -11,11 +11,15 @@ export const MSG = {
   ERROR: 'দুঃখিত, এখন একটু সমস্যা হচ্ছে। একটু পরে আবার চেষ্টা করুন অথবা ৩৩৩ নম্বরে ফোন করুন।',
   INVALID_PHONE: 'মোবাইল নম্বরটি সঠিক নয়। ০১ দিয়ে শুরু ১১ অঙ্কের নম্বর দিন।',
   DECISION_NOTE: 'চূড়ান্ত সিদ্ধান্ত সংশ্লিষ্ট অফিস নেবে।',
+  CONFLICT_NOTE: 'এই দুই সেবার নিয়ম আলাদা। আপনার ক্ষেত্রে কোনটি প্রযোজ্য, তা উপজেলা অফিস ঠিক করবে।',
+  SITUATION_HEARD: 'আমি যা বুঝেছি: {summary}',
 } as const
 
 /** English versions of the MSG texts the app shows itself. */
 export const MSG_EN = {
   ERROR: 'Sorry, something is not working right now. Please try again a little later or call 333.',
+  CONFLICT_NOTE: 'The rules of these two services differ. The upazila office decides which one applies to you.',
+  SITUATION_HEARD: 'What I understood: {summary}',
   INVALID_PHONE: 'This mobile number is not valid. Enter an 11-digit number that starts with 01.',
 } as const
 
@@ -81,8 +85,8 @@ const bn = {
   chipBirth: 'জন্ম নিবন্ধন',
   chipPassport: 'ই-পাসপোর্ট',
   chipDisability: 'প্রতিবন্ধী ভাতা',
-  chipLand: 'জমির নামজারি',
-  chipTrade: 'ট্রেড লাইসেন্স',
+  chipSituationWidow: 'স্বামী মারা গেছেন',
+  chipSituationMixed: 'বিধবা, বয়স ৬৬: দুই ভাতা?',
   // checklist card and sources
   checklistTitle: 'যা জানা দরকার',
   checklistWho: 'কারা পাবেন',
@@ -92,6 +96,9 @@ const bn = {
   checklistDecision: 'সিদ্ধান্ত',
   unknownField: 'তথ্য পাওয়া যায়নি',
   sourcesTitle: 'সূত্র (সরকারি কাগজ)',
+  conflictTitle: 'নিয়ম আলাদা',
+  conflictTopic: 'বিষয়: {topic}',
+  situationLabel: 'আপনার অবস্থা',
   // history
   history: 'আগের উত্তর',
   historySub: 'History',
@@ -215,8 +222,8 @@ const en: UiText = {
   chipBirth: 'Birth registration',
   chipPassport: 'e-Passport',
   chipDisability: 'Disability allowance',
-  chipLand: 'Land mutation',
-  chipTrade: 'Trade licence',
+  chipSituationWidow: 'My husband died',
+  chipSituationMixed: 'Widow, 66: two allowances?',
   checklistTitle: 'What you need to know',
   checklistWho: 'Who can get it',
   checklistPapers: 'Papers needed',
@@ -225,6 +232,9 @@ const en: UiText = {
   checklistDecision: 'Decision',
   unknownField: 'Not stated in the official documents',
   sourcesTitle: 'Sources (official documents)',
+  conflictTitle: 'The rules differ',
+  conflictTopic: 'Topic: {topic}',
+  situationLabel: 'Your situation',
   history: 'History',
   historySub: '',
   historyTitle: 'Your earlier answers',

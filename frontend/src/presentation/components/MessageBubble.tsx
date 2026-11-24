@@ -1,12 +1,16 @@
 // One message in the chat: the user's question, an answer from Ek Call, or an error (FR-APP-02, 08).
 // An answer shows (SRS 3.3): service tag, the spoken-style answer, the checklist card, the sources.
+// A two-service answer (sprint W2, FR-APP-11) shows the situation chip, one checklist card per
+// service with its own tag and sources, and the "rules differ" box.
 
 import { useEffect, useState } from 'react'
 import { useLanguage } from '../../application/languageContext'
-import type { ChatMessage, ChatResponse } from '../../domain/types'
+import type { ChatMessage, ChatResponse, Citation, ServiceChecklist } from '../../domain/types'
 import { ChecklistCard } from './ChecklistCard'
+import { ConflictBox } from './ConflictBox'
 import { RichText } from './RichText'
 import { ServiceTag } from './ServiceTag'
+import { SituationChip } from './SituationChip'
 import { SourceList } from './SourceList'
 import { PlayAnswerButton } from './voice/PlayAnswerButton'
 
@@ -16,12 +20,64 @@ function titleLine(displayText: string): string {
   return first.trim().startsWith('**') ? first : ''
 }
 
+/** Chunk ids are "<service_id>-NNN", so each service card can list its own sources. */
+function citationsOf(citations: Citation[], serviceId: string): Citation[] {
+  return citations.filter((c) => c.chunk_id.startsWith(`${serviceId}-`))
+}
+
+function MultiAnswer({ answer, checklists }: { answer: ChatResponse; checklists: ServiceChecklist[] }) {
+  const { lang } = useLanguage()
+  const services = answer.services ?? []
+  const nameOf = (id: string) => {
+    const s = services.find((x) => x.id === id)
+    return s ? (lang === 'en' ? s.name_en : s.name_bn) : id
+  }
+  const placed = new Set(checklists.flatMap((c) => citationsOf(answer.citations, c.service_id).map((x) => x.chunk_id)))
+  const rest = answer.citations.filter((c) => !placed.has(c.chunk_id))
+  return (
+    <>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        {services.map((s) => (
+          <ServiceTag key={s.id} name={nameOf(s.id)} />
+        ))}
+      </div>
+      <p lang="bn" className="text-lg leading-relaxed break-words">
+        {answer.speech_text}
+      </p>
+      <div className="mt-2">
+        <PlayAnswerButton text={answer.speech_text} />
+      </div>
+      <div className="mt-3 space-y-3">
+        {checklists.map((c) => (
+          <div key={c.service_id} className="space-y-2">
+            <ServiceTag name={nameOf(c.service_id)} />
+            <ChecklistCard checklist={c} />
+            <SourceList citations={citationsOf(answer.citations, c.service_id)} />
+          </div>
+        ))}
+      </div>
+      {(answer.conflicts?.length ?? 0) > 0 && (
+        <div className="mt-3">
+          <ConflictBox conflicts={answer.conflicts ?? []} serviceName={nameOf} />
+        </div>
+      )}
+      {rest.length > 0 && (
+        <div className="mt-3">
+          <SourceList citations={rest} />
+        </div>
+      )}
+    </>
+  )
+}
+
 function AnswerBubble({ answer }: { answer: ChatResponse }) {
   const { lang, t } = useLanguage()
+  const situation = answer.situation
   if (answer.status === 'follow_up') {
     // The agent needs one more detail before it can answer; the user simply replies below.
     return (
       <div className="rounded-2xl rounded-tl-sm border-2 border-bd-red bg-bd-red-soft p-4">
+        {situation && <SituationChip situation={situation} />}
         <p className="mb-1 text-base font-bold text-bd-red-dark">{t.followUpLabel}</p>
         <p lang="bn" className="text-lg font-bold">
           {answer.follow_up_question || answer.display_text}
@@ -34,10 +90,20 @@ function AnswerBubble({ answer }: { answer: ChatResponse }) {
   }
 
   const isFallback = answer.status !== 'answered'
+  const checklists = answer.checklists ?? []
+  if (!isFallback && answer.mode === 'multi' && checklists.length > 1) {
+    return (
+      <div className="rounded-2xl rounded-tl-sm bg-white p-4 shadow-sm">
+        {situation && <SituationChip situation={situation} />}
+        <MultiAnswer answer={answer} checklists={checklists} />
+      </div>
+    )
+  }
   return (
     <div
       className={`rounded-2xl rounded-tl-sm bg-white p-4 shadow-sm ${isFallback ? 'border-2 border-gray-300' : ''}`}
     >
+      {situation && !isFallback && <SituationChip situation={situation} />}
       <div className="mb-2 flex flex-wrap items-center gap-2">
         {answer.service && !isFallback && (
           <ServiceTag name={lang === 'en' ? answer.service.name_en : answer.service.name_bn} />

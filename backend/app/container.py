@@ -416,7 +416,22 @@ class Container:
             cache=self.answer_cache,
             voice_fast_mode=s.voice_fast_mode,
             llm_backend=s.llm_backend,
+            situation_mode=s.situation_mode,  # sprint: situations and mixed questions
+            multi_service_min_prob=s.multi_service_min_prob,
+            max_services=s.max_services_per_question,
+            query_expansion=s.query_expansion,
+            max_speech_words_multi=s.max_speech_words_multi,
+            hint_classifier=self.hint_classifier,
+            hint_min_confidence=s.situation_hint_min_confidence,
         )
+
+    @cached_property
+    def hint_classifier(self) -> ServiceClassifier | None:
+        """TF-IDF v2 as the situation hint router (T6); None when its file is missing."""
+        path = self.settings.situation_hint_model_path
+        if not self.settings.situation_mode or not path.exists():
+            return None
+        return TfidfClassifier(path)
 
     # ------------------------------------------------------------ health (NFR-REL-02)
 

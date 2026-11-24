@@ -7,7 +7,7 @@ from pydantic import BaseModel, StringConstraints
 
 from app.application.dto import AskResult, HistoryResult
 from app.application.ports.repositories import ChecklistRecord
-from app.domain.entities import Checklist, Citation, Message, Service
+from app.domain.entities import Answer, Checklist, Citation, Conflict, Message, Service, SituationProfile
 
 QuestionText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
 
@@ -40,6 +40,53 @@ class ChecklistOut(BaseModel):
     @classmethod
     def of(cls, c: Checklist) -> "ChecklistOut":
         return cls(who=c.who, papers=list(c.papers), fee=c.fee, where=c.where, decision=c.decision)
+
+
+class ServiceChecklistOut(ChecklistOut):
+    service_id: str
+
+    @classmethod
+    def of(cls, c: Checklist) -> "ServiceChecklistOut":  # type: ignore[override]
+        return cls(
+            service_id=c.service_id, who=c.who, papers=list(c.papers), fee=c.fee, where=c.where,
+            decision=c.decision,
+        )  # fmt: skip
+
+
+class SituationOut(BaseModel):
+    summary_bn: str
+    facts: dict[str, str]
+
+    @classmethod
+    def of(cls, s: SituationProfile) -> "SituationOut":
+        return cls(summary_bn=s.summary_bn, facts=dict(s.facts))
+
+
+class ConflictSideOut(BaseModel):
+    service_id: str
+    rule_bn: str
+    source_title: str
+    source_url: str
+
+
+class ConflictOut(BaseModel):
+    topic_bn: str
+    sides: list[ConflictSideOut]
+
+    @classmethod
+    def of(cls, c: Conflict) -> "ConflictOut":
+        return cls(
+            topic_bn=c.topic_bn,
+            sides=[
+                ConflictSideOut(
+                    service_id=s.service_id,
+                    rule_bn=s.rule_bn,
+                    source_title=s.source_title,
+                    source_url=s.source_url,
+                )  # fmt: skip
+                for s in c.sides
+            ],
+        )
 
 
 class CitationOut(BaseModel):
@@ -76,6 +123,12 @@ class ChatResponse(BaseModel):
     citations: list[CitationOut]
     follow_up_question: str | None
     latency_ms: int
+    # Sprint additions (FR-AGT-19 to 22, FR-APP-11). Additive: old clients ignore them.
+    mode: str = "single"
+    situation: SituationOut | None = None
+    services: list[ServiceBrief] = []
+    checklists: list[ServiceChecklistOut] = []
+    conflicts: list[ConflictOut] = []
 
     @classmethod
     def of(cls, r: AskResult) -> "ChatResponse":
@@ -94,7 +147,25 @@ class ChatResponse(BaseModel):
             citations=[CitationOut.of(c) for c in a.citations],
             follow_up_question=a.follow_up_question,
             latency_ms=r.latency_ms,
+            mode=a.mode,
+            situation=SituationOut.of(a.situation) if a.situation else None,
+            services=[ServiceBrief(id=x.id, name_bn=x.name_bn, name_en=x.name_en) for x in _services_of(r)],
+            checklists=[ServiceChecklistOut.of(c) for c in _checklists_of(a)],
+            conflicts=[ConflictOut.of(c) for c in a.conflicts],
         )
+
+
+def _checklists_of(a: Answer) -> tuple[Checklist, ...]:
+    if a.checklists:
+        return a.checklists
+    return (a.checklist,) if a.checklist else ()
+
+
+def _services_of(r: AskResult) -> tuple[Service, ...]:
+    """Every service of the answer, primary first (old results: just the primary)."""
+    if r.services:
+        return r.services
+    return (r.service,) if r.service else ()
 
 
 # ------------------------------------------------------------------ history

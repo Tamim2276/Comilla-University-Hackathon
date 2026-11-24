@@ -9,6 +9,15 @@ from typing import Final
 # Router (FR-AGT-03)
 ROUTER_CONFIDENCE_THRESHOLD: Final = 0.7
 
+# Situations and mixed questions (FR-AGT-19 to 22)
+SITUATION_MODE: Final = True
+MULTI_SERVICE_MIN_PROB: Final = 0.25  # the router's 2nd label at least this likely -> run `understand`
+MAX_SERVICES_PER_QUESTION: Final = 2
+QUERY_EXPANSION: Final = True
+MAX_SPEECH_WORDS_MULTI: Final = 60
+MULTI_TOP_K: Final = 3  # passages per service in multi mode
+HINT_MIN_CONFIDENCE: Final = 0.35  # the hint router itself below this -> `understand` (tuned on val_v2)
+
 # Retrieval (FR-AGT-05, FR-AGT-07)
 TOP_K: Final = 5
 RETRIEVAL_MIN_SCORE: Final = 0.80

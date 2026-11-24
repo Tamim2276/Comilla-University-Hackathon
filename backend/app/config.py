@@ -57,6 +57,15 @@ class Settings(BaseSettings):
     voice_fast_mode: bool = True
     agent_engine: Literal["langgraph", "stub"] = "langgraph"  # stub: fixed answer, no keys needed
     preload_models: bool = False  # True in .env.example: load models in the background at startup
+    # Situations and mixed questions (FR-AGT-19 to 22). SITUATION_MODE=false restores the old flow.
+    situation_mode: bool = policies.SITUATION_MODE
+    multi_service_min_prob: float = Field(policies.MULTI_SERVICE_MIN_PROB, gt=0, lt=1)
+    max_services_per_question: int = Field(policies.MAX_SERVICES_PER_QUESTION, ge=1, le=2)
+    query_expansion: bool = policies.QUERY_EXPANSION
+    max_speech_words_multi: int = Field(policies.MAX_SPEECH_WORDS_MULTI, ge=20, le=120)
+    # Second, cheap router trained with situations; missing file = off (tuning: situation_eval.md)
+    situation_hint_model_path: Path = BACKEND_DIR / "data" / "models" / "tfidf_router_v2.joblib"
+    situation_hint_min_confidence: float = Field(policies.HINT_MIN_CONFIDENCE, ge=0, lt=1)
 
     # --- Twilio (FR-CALL)
     twilio_account_sid: str = ""

@@ -6,7 +6,8 @@ Framework-free: the voice router turns a VoiceReply into TwiML.
 Rules, in order:
 1. A goodbye phrase ends the call, unless a follow-up question is pending (then a short
    "হ্যাঁ" / "না" is the answer to it and goes to the agent).
-2. Otherwise the text goes to AskQuestion with channel=voice.
+2. Otherwise the text goes to AskQuestion with channel=voice. A two-service answer is spoken as
+   built by the agent (at most MAX_SPEECH_WORDS_MULTI words) and says TWO_SMS instead of SMS_SENT.
 3. The last allowed turn (MAX_TURNS_PER_CALL) gets its answer, then GOODBYE.
 4. Any failure speaks ERROR and keeps the call alive.
 
@@ -102,7 +103,7 @@ class HandleVoiceTurn:
 
         turn = self._calls.record_turn(call_sid)
         result = self._ask(phone, text, Channel.VOICE, call_sid)
-        reply = self._speak(result.answer, sms_now=_sms_scheduled(result))
+        reply = self._speak(result.answer, sms_count=result.sms_count)
         log.info("voice answer call_sid=%s turn=%d agent_ms=%d", call_sid, turn, result.latency_ms)
 
         if turn >= self._max_turns and not reply.hang_up:  # FR-CALL-06: answer, then end politely
@@ -118,13 +119,15 @@ class HandleVoiceTurn:
         return False
 
     @staticmethod
-    def _speak(answer: Answer, sms_now: bool) -> VoiceReply:
+    def _speak(answer: Answer, sms_count: int) -> VoiceReply:
         if answer.status is AnswerStatus.FOLLOW_UP:
             return VoiceReply(say=(answer.speech_text,), status="follow_up")  # the question itself
         if answer.status is AnswerStatus.ERROR:
             return VoiceReply(say=(messages_bn.ERROR,), status="error")
         say = [answer.speech_text]
-        if sms_now:
+        if sms_count >= 2:  # a two-service answer queued one SMS per service (sprint V1)
+            say.append(messages_bn.TWO_SMS)
+        elif sms_count == 1:
             say.append(messages_bn.SMS_SENT)
         say.append(messages_bn.CONTINUE)
         return VoiceReply(say=tuple(say), status=str(answer.status))
@@ -133,11 +136,6 @@ class HandleVoiceTurn:
 def _strip_punctuation(text: str) -> str:
     """Replaces punctuation (।,.!? ...) with spaces; keeps Bangla vowel signs, which are not \\w."""
     return "".join(" " if unicodedata.category(ch).startswith("P") else ch for ch in text)
-
-
-def _sms_scheduled(result: AskResult) -> bool:
-    """True when AskQuestion queued the SMS checklist on this turn (FR-SMS-01)."""
-    return result.sms_scheduled
 
 
 def _without_continue(texts: tuple[str, ...]) -> tuple[str, ...]:

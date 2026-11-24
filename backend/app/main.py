@@ -30,8 +30,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             log.exception("could not create database tables")
         container.warm_up()  # models load in the background (PRELOAD_MODELS), D2-T4
         app.state.container = container
-        log.info("Ek Call started (env=%s, llm=%s, router=%s, sms=%s)",
-                 settings.app_env, settings.llm_backend, settings.router_backend, settings.sms_backend)
+        log.info(
+            "Ek Call started (env=%s, llm=%s, router=%s, sms=%s)",
+            settings.app_env,
+            settings.llm_backend,
+            settings.router_backend,
+            settings.sms_backend,
+        )
         yield
         container.close()
 
