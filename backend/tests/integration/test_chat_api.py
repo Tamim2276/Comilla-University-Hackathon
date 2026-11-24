@@ -35,7 +35,9 @@ def test_chat_returns_the_srs_response_shape(client: TestClient) -> None:
     assert set(body) == {
         "conversation_id", "status", "service", "confidence", "router", "speech_text", "display_text",
         "checklist", "citations", "follow_up_question", "latency_ms",
+        "mode", "situation", "services", "checklists", "conflicts",  # sprint additions (additive)
     }  # fmt: skip
+    assert body["mode"] == "single" and body["situation"] is None and body["conflicts"] == []
     assert body["status"] == "answered"
     assert body["service"]["id"] == "old_age_allowance"
     assert body["service"]["name_bn"] == "বয়স্ক ভাতা"

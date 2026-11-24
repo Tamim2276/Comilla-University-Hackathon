@@ -387,7 +387,9 @@ def test_app_question_runs_grade_generate_verify() -> None:
     answer = LangGraphAnswerEngine(deps(llm=llm)).answer("আমার বয়স ৬৭, বয়স্ক ভাতা পাবো?", [], Channel.APP)
     assert answer.status is AnswerStatus.ANSWERED and answer.service_id == "old_age_allowance"
     assert llm.steps == ["grade", "generate", "verify"] and answer.llm_calls == 3
-    assert set(answer.timings) == {"classify", "retrieve", "grade", "generate", "verify", "finalize", "total"}
+    assert set(answer.timings) == {
+        "classify", "retrieve", "grade", "generate", "grounding_guard", "verify", "finalize", "total"
+    }  # fmt: skip
 
 
 def test_voice_fast_mode_uses_two_llm_calls() -> None:  # D1-T5 target
@@ -455,9 +457,10 @@ def test_unsure_router_asks_the_llm_first() -> None:
 def test_follow_up_then_answer_keeps_the_service() -> None:  # S2
     follow = {**GOOD_DRAFT, "follow_up_question": "আপনি কি এই এলাকার স্থায়ী বাসিন্দা?"}
     llm = StepLLM(generate=[follow, GOOD_DRAFT], verify=[ALL_SUPPORTED])
-    widow_passage = dataclasses.replace(PASSAGES[0], service_id="widow_allowance")
+    # every passage GOOD_DRAFT cites must exist, or grounding_guard drops the claim (FR-AGT-22)
+    widow_passages = [dataclasses.replace(p, service_id="widow_allowance") for p in PASSAGES]
     engine = LangGraphAnswerEngine(
-        deps(scores={"widow_allowance": 0.9, "other": 0.1}, llm=llm, passages=[widow_passage])
+        deps(scores={"widow_allowance": 0.9, "other": 0.1}, llm=llm, passages=widow_passages)
     )
     first = engine.answer("বিধবা ভাতার জন্য কী লাগে?", [], Channel.VOICE)
     assert first.status is AnswerStatus.FOLLOW_UP and first.follow_up_question

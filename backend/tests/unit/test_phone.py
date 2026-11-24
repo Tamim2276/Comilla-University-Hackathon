@@ -53,4 +53,4 @@ def test_phone_number_is_immutable_and_comparable() -> None:
 def test_enum_values_match_the_srs() -> None:
     assert [c.value for c in Channel] == ["voice", "app", "sms"]
     assert [s.value for s in AnswerStatus] == ["answered", "follow_up", "fallback", "error"]
-    assert [r.value for r in RouterSource] == ["banglabert", "tfidf", "llm", "context"]
+    assert [r.value for r in RouterSource] == ["banglabert", "tfidf", "llm", "context", "situation"]

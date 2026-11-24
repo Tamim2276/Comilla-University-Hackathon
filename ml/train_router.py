@@ -80,6 +80,8 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=0, help="use only this many training rows (smoke run)")
     parser.add_argument("--out", type=Path, default=MODELS / "router")
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--train", type=Path, default=QUESTIONS / "train.csv")
+    parser.add_argument("--val", type=Path, default=QUESTIONS / "val.csv")
     args = parser.parse_args()
 
     set_seed(args.seed)
@@ -88,8 +90,8 @@ def main() -> int:
         torch.set_num_threads(os.cpu_count() or 4)
     print(f"device: {device}  threads: {torch.get_num_threads()}")
 
-    x_train, y_train = read_csv(QUESTIONS / "train.csv")
-    x_val, y_val = read_csv(QUESTIONS / "val.csv")
+    x_train, y_train = read_csv(args.train)
+    x_val, y_val = read_csv(args.val)
     x_test, y_test = read_csv(QUESTIONS / "test.csv")
     if args.limit:
         order = random.sample(range(len(x_train)), min(args.limit, len(x_train)))

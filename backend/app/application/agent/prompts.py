@@ -297,7 +297,11 @@ VERIFY_SCHEMA: dict[str, Any] = {
         },
     },
     "required": [
-        "claims", "speech_supported", "display_supported", "answers_question", "unsupported_checklist"
+        "claims",
+        "speech_supported",
+        "display_supported",
+        "answers_question",
+        "unsupported_checklist",
     ],
 }
 
@@ -315,6 +319,16 @@ def format_checklist(checklist: Mapping[str, Any] | None) -> str:
     return "\n".join(lines)
 
 
+# Two-service answers end with fixed sentences (CONFLICT_NOTE, COMBINE_UNKNOWN). They never come
+# from the LLM, and an honest "the documents do not say" answers that part of the question.
+VERIFY_MULTI_NOTE = """
+
+This answer covers TWO services. Its last sentences are fixed texts of the helpline (they say the
+rules differ, or that the official documents do not say whether both can be received together).
+Do not check them against the passages. For `answers_question`, such a sentence counts as an
+honest answer to that part of the question."""
+
+
 def build_verify_prompt(
     claims: Sequence[str],
     speech: str,
@@ -322,6 +336,7 @@ def build_verify_prompt(
     display: str = "",
     checklist: Mapping[str, Any] | None = None,
     question: str = "",
+    multi: bool = False,
 ) -> str:
     numbered = "\n".join(f"{i}. {text}" for i, text in enumerate(claims)) or "(none)"
     return VERIFY_PROMPT.format(
@@ -331,4 +346,247 @@ def build_verify_prompt(
         speech=speech,
         display=display or "(none)",
         checklist=format_checklist(checklist),
+    ) + (VERIFY_MULTI_NOTE if multi else "")
+
+
+# ---------------------------------------------------------------- understand (FR-AGT-19, 23)
+
+UNDERSTAND_PROMPT = """You help "Ek Call", a Bangla phone helpline about Bangladesh government services.
+Citizens often describe their life situation instead of naming a service ("my husband died and I
+cannot run the family" means widow allowance). Read the situation and decide which services it is
+about.
+
+Services (id: Bangla name (English name) - words the official documents use):
+{labels}
+
+Hints from small classifiers (may be wrong): {hints}
+
+Conversation so far (use it to understand short replies such as "হ্যাঁ" or "৭০ বছর"):
+{history}
+
+Latest message: {question}
+
+Rules:
+1. `services`: at most {max_services} ids from the list above, the most relevant first. Use two
+   only when the citizen really asks about two services (for example a widow aged 66 asking about
+   two allowances). Never use `other` here.
+2. `out_of_scope`: true when none of the services fits (crops, animals, health, disputes, weather,
+   bills, other government offices...); then `services` is empty.
+3. `facts`: only facts the citizen actually said (age, gender, marital_status, disability, goal,
+   relation...), as short Bangla values. Never guess a fact that was not said.
+4. `summary_bn`: one short Bangla line with what you understood, for example
+   "স্বামী মারা গেছেন, দুই সন্তান, আয় নেই". Empty if out of scope.
+5. `search_queries`: for every chosen service, one formal Bangla search query in the official
+   documents' own words (for example "বিধবা ভাতা পাওয়ার যোগ্যতা ও প্রয়োজনীয় কাগজ").
+6. `needs_follow_up`: almost always false. True only when the message is too vague to pick any
+   service (for example "আমি খুব গরিব, সরকার থেকে কি কিছু পাওয়া যায়?"), or when one short question
+   would decide between two services. Then `follow_up_question` is ONE short, polite Bangla
+   question (for example "আপনার বা আপনার পরিবারের কারো বয়স কি ৬৫ বছরের বেশি, নাকি কেউ বিধবা বা
+   প্রতিবন্ধী?"). {follow_up_rule}
+7. Output JSON only, matching the schema."""
+
+_FOLLOW_UP_ALLOWED = "Never ask about something the conversation already says."
+_FOLLOW_UP_USED = (
+    "A follow-up question was ALREADY asked in this conversation: needs_follow_up must be false; "
+    "choose the best service(s) from what was said, or out_of_scope."
+)
+
+
+def understand_schema(labels: Sequence[str]) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "services": {"type": "array", "items": {"type": "string", "enum": list(labels)}},
+            "out_of_scope": {"type": "boolean"},
+            "facts": {"type": "object", "additionalProperties": {"type": "string"}},
+            "summary_bn": {"type": "string"},
+            "search_queries": {"type": "object", "additionalProperties": {"type": "string"}},
+            "needs_follow_up": {"type": "boolean"},
+            "follow_up_question": {"type": "string"},
+        },
+        "required": ["services", "out_of_scope", "summary_bn", "search_queries", "needs_follow_up"],
+    }
+
+
+def format_services_with_terms(services: Mapping[str, Service]) -> str:
+    lines = []
+    for s in services.values():
+        if s.id == "other":
+            continue
+        terms = f" - {s.search_terms_bn}" if s.search_terms_bn else ""
+        lines.append(f"- {s.id}: {s.name_bn} ({s.name_en}){terms}")
+    return "\n".join(lines)
+
+
+def build_understand_prompt(
+    question: str,
+    services: Mapping[str, Service],
+    hints: Sequence[tuple[str, float]] = (),
+    history: Sequence[Message] = (),
+    max_services: int = 2,
+    follow_up_used: bool = False,
+) -> str:
+    hint_text = ", ".join(f"{label} {score:.2f}" for label, score in hints[:6]) or "(none)"
+    return UNDERSTAND_PROMPT.format(
+        labels=format_services_with_terms(services),
+        hints=hint_text,
+        history=format_history(history),
+        question=question,
+        max_services=max_services,
+        follow_up_rule=_FOLLOW_UP_USED if follow_up_used else _FOLLOW_UP_ALLOWED,
+    )
+
+
+# ---------------------------------------------------------------- generate, two services (FR-AGT-21, 22)
+
+
+def format_passages_grouped(passages: Sequence[Passage]) -> str:
+    """`[old_age_allowance][P1] title: text`, so every passage shows which service it belongs to."""
+    return "\n\n".join(
+        f"[{p.service_id}][{passage_id(i)}] {p.title}: {p.text}" for i, p in enumerate(passages)
+    )
+
+
+GENERATE_MULTI_PROMPT = """You are "Ek Call", a Bangla helpline that explains Bangladesh government
+services to rural and elderly citizens. The citizen asks about TWO services: {service_names}.
+Channel: {channel}.
+
+Official passages, each marked with the service it belongs to (the ONLY allowed source of facts):
+{passages}
+
+What we understood about the citizen (only to point to the relevant rule, NEVER to decide
+eligibility): {situation}
+
+Conversation so far (only to understand the question; never copy facts from it):
+{history}
+
+Citizen's question: {question}
+
+Rules:
+1. One section per service, in this order: {service_ids}. Write each service's rules ONLY from
+   that service's own passages. A claim's service_id must be its section's service, and its
+   passage_ids must be passages of that same service.
+2. Never mix the rules of two services in one sentence or one claim.
+3. If the two services' rules differ on the same point (age, papers, office, amount...), add it
+   to `conflicts`: one side per service, each with its own rule and its own passage_ids. Do NOT
+   say which rule wins or applies.
+4. `asks_combine`: true when the citizen asks whether both can be received together.
+   `combine_rule.stated` is true ONLY if a passage says whether both can be received together;
+   then `text_bn` repeats what it says, as a rule ("... নিয়ম অনুযায়ী ..."), and `passage_ids` cite it.
+   A passage saying that a person who already receives another regular government allowance
+   cannot get this one IS such a rule. Otherwise stated=false and never write "yes" or "no" about
+   receiving both. A rule that both services state the same way is NOT a conflict.
+5. `direct_answer`: when the citizen asks one direct question across the services (which one to do
+   first, which one fits, whether one is needed for the other), answer it in ONE short Bangla
+   sentence that a passage supports, with its `passage_ids`; for example, if the passport passage
+   says the online birth certificate is needed, then "আগে জন্ম নিবন্ধন করুন, কারণ পাসপোর্টের আবেদনে
+   জন্ম নিবন্ধন সনদ লাগে". Set stated=true only then. If no passage supports an answer, stated=false
+   and never guess.
+6. Everyday Bangla, short sentences, Bangla digits. Never promise the benefit. Never assume facts
+   the citizen did not say. speech_text: ONE short sentence of at most {section_words} words per
+   section, with the most important rule for this citizen. {channel_rule}
+7. checklist per section: who, papers, fee, where, decision, only from that service's passages;
+   write "তথ্য পাওয়া যায়নি" for an unknown field.
+8. claims: every fact, with passage_ids and core = true when the section is wrong without it.
+9. If the passages do not answer the question for either service, return "no_answer": true.
+10. follow_up_question: almost always empty (see the single-service rules: ask only when nothing
+   useful can be said without one fact).
+11. Output JSON only, matching the schema exactly."""
+
+_CLAIM_ITEM: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "text": {"type": "string"},
+        "service_id": {"type": "string"},
+        "passage_ids": {"type": "array", "items": {"type": "string"}},
+        "core": {"type": "boolean"},
+    },
+    "required": ["text", "service_id", "passage_ids", "core"],
+}
+
+GENERATE_MULTI_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "no_answer": {"type": "boolean"},
+        "sections": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "service_id": {"type": "string"},
+                    "speech_text": {"type": "string"},
+                    "display_text": {"type": "string"},
+                    "checklist": GENERATE_SCHEMA["properties"]["checklist"],
+                    "claims": {"type": "array", "items": _CLAIM_ITEM},
+                },
+                "required": ["service_id", "speech_text", "checklist", "claims"],
+            },
+        },
+        "conflicts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "topic_bn": {"type": "string"},
+                    "sides": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "service_id": {"type": "string"},
+                                "rule_bn": {"type": "string"},
+                                "passage_ids": {"type": "array", "items": {"type": "string"}},
+                            },
+                            "required": ["service_id", "rule_bn", "passage_ids"],
+                        },
+                    },
+                },
+                "required": ["topic_bn", "sides"],
+            },
+        },
+        "asks_combine": {"type": "boolean"},
+        "combine_rule": {
+            "type": "object",
+            "properties": {
+                "stated": {"type": "boolean"},
+                "text_bn": {"type": "string"},
+                "passage_ids": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["stated"],
+        },
+        "direct_answer": {
+            "type": "object",
+            "properties": {
+                "stated": {"type": "boolean"},
+                "text_bn": {"type": "string"},
+                "passage_ids": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["stated"],
+        },
+        "follow_up_question": {"type": "string"},
+    },
+    "required": ["no_answer", "sections", "conflicts", "asks_combine", "combine_rule", "direct_answer"],
+}
+
+SECTION_WORDS = 10  # the fixed texts (intro and notes) take up to 37 of the 60 spoken words
+
+
+def build_generate_multi_prompt(
+    question: str,
+    services: Sequence[Service],
+    passages: Sequence[Passage],
+    history: Sequence[Message],
+    channel: Channel,
+    situation: str = "",
+) -> str:
+    return GENERATE_MULTI_PROMPT.format(
+        service_names=" and ".join(f"{s.name_bn} ({s.name_en})" for s in services),
+        service_ids=", ".join(s.id for s in services),
+        channel="phone call" if channel is Channel.VOICE else "web app",
+        passages=format_passages_grouped(passages),
+        situation=situation or "(nothing)",
+        history=format_history(history),
+        question=question,
+        section_words=SECTION_WORDS,
+        channel_rule=_VOICE_RULE if channel is Channel.VOICE else _APP_RULE,
     )

@@ -20,7 +20,8 @@ def load_services(path: Path) -> list[Service]:
         missing = [f for f in _FIELDS if entry.get(f) is None or not str(entry[f]).strip()]
         if missing:
             raise ValueError(f"{path.name} entry {i}: missing {missing}")
-        services.append(Service(**{f: str(entry[f]).strip() for f in _FIELDS}))
+        terms = str(entry.get("search_terms_bn") or "").strip()  # optional (FR-AGT-20)
+        services.append(Service(**{f: str(entry[f]).strip() for f in _FIELDS}, search_terms_bn=terms))
     ids = [s.id for s in services]
     duplicates = {x for x in ids if ids.count(x) > 1}
     if duplicates:

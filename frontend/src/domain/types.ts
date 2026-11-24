@@ -4,7 +4,7 @@ import { MSG, MSG_EN, type LocalText } from './messages'
 
 export type AnswerStatus = 'answered' | 'follow_up' | 'fallback' | 'error'
 
-export type RouterName = 'banglabert' | 'tfidf' | 'llm' | 'context'
+export type RouterName = 'banglabert' | 'tfidf' | 'llm' | 'context' | 'situation'
 
 export type Channel = 'voice' | 'app' | 'sms'
 
@@ -39,6 +39,30 @@ export interface Citation {
   chunk_id: string
 }
 
+/** A checklist inside a two-service answer: the same fields plus its service. */
+export interface ServiceChecklist extends Checklist {
+  service_id: string
+}
+
+/** What the agent understood about the caller's situation (FR-AGT-19). */
+export interface Situation {
+  summary_bn: string
+  facts: Record<string, string>
+}
+
+/** One service's rule on a point where two services differ, with its own source (FR-AGT-22). */
+export interface ConflictSide {
+  service_id: string
+  rule_bn: string
+  source_title: string
+  source_url: string
+}
+
+export interface Conflict {
+  topic_bn: string
+  sides: ConflictSide[]
+}
+
 /** Response of POST /api/v1/chat. */
 export interface ChatResponse {
   conversation_id: string
@@ -52,6 +76,12 @@ export interface ChatResponse {
   citations: Citation[]
   follow_up_question: string | null
   latency_ms: number
+  // Sprint additions (FR-APP-11). Optional: an older server does not send them.
+  mode?: 'single' | 'multi'
+  situation?: Situation | null
+  services?: ServiceBrief[]
+  checklists?: ServiceChecklist[]
+  conflicts?: Conflict[]
 }
 
 /** Body of POST /api/v1/chat. */

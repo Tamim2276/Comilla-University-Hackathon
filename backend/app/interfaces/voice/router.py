@@ -24,7 +24,9 @@ from app.interfaces.voice.security import verify_twilio_signature
 log = logging.getLogger(__name__)
 
 router = APIRouter(
-    prefix="/voice", tags=["voice"], dependencies=[Depends(verify_twilio_signature)]  # FR-CALL-12
+    prefix="/voice",
+    tags=["voice"],
+    dependencies=[Depends(verify_twilio_signature)],  # FR-CALL-12
 )
 
 TWIML_MEDIA_TYPE = "application/xml"

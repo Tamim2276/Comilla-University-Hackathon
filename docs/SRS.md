@@ -244,6 +244,11 @@ UI text is in Bangla with English sub-labels where useful. Large fonts and butto
 | FR-AGT-16 | Gemini adapter rotates across several API keys on HTTP 429 and retries once with back-off. | MUST |
 | FR-AGT-17 | If a follow-up is pending, skip classification and keep the service of the previous assistant turn (`router_source = context`), so a short reply such as "হ্যাঁ" is not routed to `other`. | SHOULD |
 | FR-AGT-18 | The LLM backend is selectable by config: `gemini`, `ollama` or `hybrid`. In `hybrid`, FAST-role jobs (grading, rewriting, classification) go to Ollama and MAIN-role jobs (generation, verification) go to Gemini; if Gemini is unavailable (quota, outage) the MAIN job falls back to Ollama. Every answer log records which backend produced it. | SHOULD |
+| FR-AGT-19 | Situation understanding: when the router is unsure, says `other`, sees a likely 2nd service (`MULTI_SERVICE_MIN_PROB`), or the situation hint router (TF-IDF trained with situations) disagrees or is unsure, the `understand` step extracts up to 2 services, the caller's facts, a summary and one search query per service. Off-topic questions are still refused. | MUST |
+| FR-AGT-20 | Query expansion: retrieval searches with the caller's words, the service's `search_terms_bn` and the `understand` query, merged per service. | MUST |
+| FR-AGT-21 | Multi-service questions (max 2): retrieval, checklists and SMS per service. | MUST |
+| FR-AGT-22 | Service-attributed grounding: every claim names its service and cites a passage of that same service (checked in code by `grounding_guard`); contradicting rules are shown side by side with both sources; two sides stating the same rule are not a conflict; no rule is declared the winner unless a document says so; `CONFLICT_NOTE` / `COMBINE_UNKNOWN` are fixed texts. | MUST |
+| FR-AGT-23 | One follow-up question may be used to tell two candidate services apart, or when a question is too vague to pick any service. | SHOULD |
 
 ### 4.3 SMS (`FR-SMS`)
 
@@ -270,6 +275,7 @@ UI text is in Bangla with English sub-labels where useful. Large fonts and butto
 | FR-APP-08 | Loading state while the agent works; friendly Bangla error message on failure. | MUST |
 | FR-APP-09 | One-time code by SMS before showing history of a number (family use case UC5). | COULD |
 | FR-APP-10 | Installable as a PWA. | COULD |
+| FR-APP-11 | App shows the situation summary, one checklist card per service and a "rules differ" box with both sources. | MUST |
 
 ### 4.5 Admin (`FR-ADM`)
 
@@ -295,6 +301,8 @@ UI text is in Bangla with English sub-labels where useful. Large fonts and butto
 | FR-DATA-07 | `ml/train_router.py` (run on Colab) fine-tunes `csebuetnlp/banglabert` for 9-way classification (3 to 5 epochs, max length 64) with the BanglaBERT text normaliser, and saves model, tokenizer and `labels.json`. | MUST |
 | FR-DATA-08 | `python -m scripts.eval_router` prints accuracy, macro-F1 and a confusion matrix for TF-IDF and BanglaBERT on `test.csv` and writes `docs/results/router_eval.md`. | MUST |
 | FR-DATA-09 | `python -m scripts.eval_rag` computes Recall@5 (is a passage of the gold service in the top 5) and safe-refusal rate on out-of-scope questions, and writes `docs/results/rag_eval.md`. | SHOULD |
+| FR-DATA-10 | `situation_seed.csv` (training), `situation_test.csv` and `mixed_test.csv` (hand-written, never augmented); the augment script's leak check keeps every evaluation set out of the training data. | MUST |
+| FR-DATA-11 | `scripts/eval_situation.py` writes before/after results to `docs/results/situation_eval.md`. | MUST |
 
 ---
 
@@ -332,7 +340,7 @@ UI text is in Bangla with English sub-labels where useful. Large fonts and butto
 | `PhoneNumber` (value object) | E.164 string; validates Bangladeshi mobile format `+8801[3-9]XXXXXXXX` |
 | `Channel` (enum) | `voice`, `app`, `sms` |
 | `AnswerStatus` (enum) | `answered`, `follow_up`, `fallback`, `error` |
-| `RouterSource` (enum) | `banglabert`, `tfidf`, `llm`, `context` |
+| `RouterSource` (enum) | `banglabert`, `tfidf`, `llm`, `context`, `situation` |
 | `Citation` | `title`, `source_url`, `snippet`, `chunk_id` |
 | `Checklist` | `service_id`, `who`, `papers` (list), `fee`, `where`, `decision` |
 | `Answer` | `status`, `service_id`, `confidence`, `router_source`, `speech_text`, `display_text`, `checklist`, `citations`, `follow_up_question`, `timings`, `llm_calls` |
@@ -484,9 +492,16 @@ All JSON. Base `/api/v1` unless noted. FastAPI also serves Swagger at `/docs`.
   },
   "citations": [{"title": "বয়স্ক ভাতা কার্যক্রম", "source_url": "https://...", "snippet": "...", "chunk_id": "old_age_allowance-002"}],
   "follow_up_question": null,
-  "latency_ms": 3210
+  "latency_ms": 3210,
+  "mode": "single",
+  "situation": null,
+  "services": [{"id": "old_age_allowance", "name_bn": "বয়স্ক ভাতা", "name_en": "Old Age Allowance"}],
+  "checklists": [{"service_id": "old_age_allowance", "who": "...", "papers": ["..."], "fee": "...", "where": "...", "decision": "..."}],
+  "conflicts": []
 }
 ```
+
+`mode`, `situation`, `services`, `checklists` and `conflicts` are additive (FR-AGT-19 to 22, FR-APP-11). For a two-service answer `mode` is `multi`, `services` and `checklists` have one entry per service (the old `service` and `checklist` stay the primary service), `situation` is `{"summary_bn": "...", "facts": {"age": "৬৬"}}`, and each conflict is `{"topic_bn": "...", "sides": [{"service_id", "rule_bn", "source_title", "source_url"}, ...]}`.
 
 Error format for all endpoints: `{"error": {"code": "LLM_UNAVAILABLE", "message_bn": "...", "message_en": "..."}}`.
 
@@ -511,6 +526,13 @@ Error format for all endpoints: `{"error": {"code": "LLM_UNAVAILABLE", "message_
 | `ROUTER_BACKEND` | `tfidf` / `banglabert` / `llm` | FR-AGT-02 |
 | `ROUTER_MODEL_DIR` | `data/models/router` | BanglaBERT folder |
 | `ROUTER_CONFIDENCE_THRESHOLD` | `0.7` | FR-AGT-03 |
+| `SITUATION_MODE` | `true` | FR-AGT-19 to 23 (`false` restores the single-service flow) |
+| `MULTI_SERVICE_MIN_PROB` | `0.25` | FR-AGT-19 |
+| `MAX_SERVICES_PER_QUESTION` | `2` | FR-AGT-21 |
+| `QUERY_EXPANSION` | `true` | FR-AGT-20 |
+| `MAX_SPEECH_WORDS_MULTI` | `60` | FR-AGT-21 spoken answer limit |
+| `SITUATION_HINT_MODEL_PATH` | `data/models/tfidf_router_v2.joblib` | FR-AGT-19 (missing file = no hint router) |
+| `SITUATION_HINT_MIN_CONFIDENCE` | `0.35` | FR-AGT-19: the hint router below this sends the question to `understand` |
 | `EMBED_MODEL` | `intfloat/multilingual-e5-small` | Embeddings |
 | `CHROMA_DIR` | `data/chroma` | Vector store |
 | `RETRIEVAL_MIN_SCORE` | `0.80` | FR-AGT-05 similarity threshold (tune on real questions; e5 scores sit close together) |
@@ -598,6 +620,11 @@ Every result table must state which `LLM_BACKEND` and model produced it, because
 | `INVALID_PHONE` | মোবাইল নম্বরটি সঠিক নয়। ০১ দিয়ে শুরু ১১ অঙ্কের নম্বর দিন। |
 | `NOT_FOUND` | কোনো তথ্য পাওয়া যায়নি। |
 | `BAD_REQUEST` | অনুরোধটি সঠিক নয়। তথ্যগুলো দেখে আবার চেষ্টা করুন। |
+| `MULTI_INTRO` | আপনার কথায় দুটি সেবার কথা আসছে: {a} আর {b}। |
+| `CONFLICT_NOTE` | এই দুই সেবার নিয়ম আলাদা। আপনার ক্ষেত্রে কোনটি প্রযোজ্য, তা উপজেলা অফিস ঠিক করবে। |
+| `COMBINE_UNKNOWN` | দুটি সুবিধা একসাথে পাওয়া যায় কিনা, সরকারি কাগজে আমি নিশ্চিত তথ্য পাইনি। |
+| `TWO_SMS` | দুটি সেবার জন্য আলাদা দুটি এসএমএস পাঠানো হয়েছে। |
+| `SITUATION_HEARD` | আমি যা বুঝেছি: {summary} |
 
 ## Appendix B: Prompt rules (for the agent steps)
 1. Answer **only** from the given passages. If the passages do not contain the answer, return `"no_answer": true`.

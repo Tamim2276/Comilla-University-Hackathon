@@ -8,6 +8,7 @@ macro-F1 on val.csv and on the hand-written test.csv, plus how often out-of-scop
 labelled `other`. Saves data/models/tfidf_router.joblib ({"pipeline", "labels"}).
 """
 
+import argparse
 import csv
 import sys
 from pathlib import Path
@@ -57,7 +58,12 @@ def report(name: str, pipeline: Pipeline, texts: list[str], labels: list[str]) -
 
 
 def main() -> int:
-    train_path, val_path = QUESTIONS_DIR / "train.csv", QUESTIONS_DIR / "val.csv"
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--train", type=Path, default=QUESTIONS_DIR / "train.csv")
+    parser.add_argument("--val", type=Path, default=QUESTIONS_DIR / "val.csv")
+    parser.add_argument("--out", type=Path, default=None, help="default: TFIDF_MODEL_PATH")
+    args = parser.parse_args()
+    train_path, val_path = args.train, args.val
     if not train_path.exists():
         print("train.csv not found: run python -m scripts.augment_questions first")
         return 1
@@ -81,7 +87,7 @@ def main() -> int:
     print("\nper label on test.csv:")
     print(classification_report(y_test, pipeline.predict(x_test), digits=2, zero_division=0))
 
-    out = Settings().tfidf_model_path
+    out = (args.out or Settings().tfidf_model_path).resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump({"pipeline": pipeline, "labels": list(pipeline.classes_)}, out)
     print(f"saved {out.relative_to(BACKEND_DIR)}")

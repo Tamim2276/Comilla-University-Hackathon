@@ -1,5 +1,7 @@
 // Example questions for the main services (FR-APP-07). Typed exactly like
 // backend/data/questions/demo_questions.txt, so they hit the pre-warmed answer cache.
+// The two situation examples (sprint S10, S12) describe a life, not a service name; such answers
+// are never cached.
 
 import { useLanguage } from '../../application/languageContext'
 import type { UiText } from '../../domain/messages'
@@ -12,8 +14,11 @@ const EXAMPLES: { label: keyof UiText; question: string }[] = [
   { label: 'chipBirth', question: 'জন্ম নিবন্ধন করতে কী কী কাগজ লাগে?' },
   { label: 'chipPassport', question: 'ই-পাসপোর্ট করতে কত টাকা লাগে?' },
   { label: 'chipDisability', question: 'প্রতিবন্ধী ভাতা পেতে কী কী কাগজ লাগে?' },
-  { label: 'chipLand', question: 'জমির নামজারি করতে কী কী লাগে?' },
-  { label: 'chipTrade', question: 'ট্রেড লাইসেন্স করতে কী কী কাগজ লাগে?' },
+  {
+    label: 'chipSituationWidow',
+    question: 'আমার স্বামী গত বছর মারা গেছেন, দুটো বাচ্চা নিয়ে খুব কষ্টে আছি। সরকার থেকে কোনো সাহায্য পাওয়া যায়?',
+  },
+  { label: 'chipSituationMixed', question: 'আমি বিধবা, বয়স ৬৬। বয়স্ক ভাতা আর বিধবা ভাতা দুটোই কি একসাথে পাবো?' },
 ]
 
 export function ExampleChips({
