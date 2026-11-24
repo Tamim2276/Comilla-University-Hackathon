@@ -38,6 +38,7 @@ class AgentState(TypedDict, total=False):
     relevant_ids: list[str]  # "P1", "P2"... chosen by grade
     retries: int  # one counter for the grade, generate and verify loops (max MAX_RETRIEVAL_RETRIES)
     draft: dict[str, Any]  # the generate step's JSON
+    llm_provider: str | None  # who wrote the draft: gemini, groq, openrouter... (FR-AGT-18)
     verified_claims: list[dict[str, Any]]  # draft claims, each with `supported` added by verify
     speech_supported: bool
     answers_question: bool  # the verifier found the answer is about the question that was asked

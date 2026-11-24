@@ -49,8 +49,10 @@ from app.infrastructure.db.repositories import (
     SqlQuestionLogRepo,
 )
 from app.infrastructure.db.session import init_db, make_engine, make_session_factory
+from app.infrastructure.llm.fallback_llm import FallbackLLM
 from app.infrastructure.llm.gemini_llm import GeminiLLM
 from app.infrastructure.llm.ollama_llm import OllamaLLM
+from app.infrastructure.llm.openai_compat_llm import OpenAICompatLLM
 from app.infrastructure.llm.routed_llm import RoutedLLM
 from app.infrastructure.ml.banglabert_classifier import BanglaBertClassifier
 from app.infrastructure.ml.kmeans_clusterer import KMeansClusterer
@@ -143,11 +145,40 @@ class Container:
             s.gemini_model_main,
             s.gemini_model_fast,
             fallback_model=s.gemini_model_fallback,
+            budget_s=s.gemini_budget_s,
         )
 
     @cached_property
     def ollama(self) -> OllamaLLM:
         return OllamaLLM(self.settings.ollama_url, self.settings.ollama_model)
+
+    @cached_property
+    def groq(self) -> OpenAICompatLLM:
+        s = self.settings
+        return OpenAICompatLLM(s.groq_key_list, s.groq_model, s.groq_base_url)
+
+    @cached_property
+    def openrouter(self) -> OpenAICompatLLM:
+        s = self.settings
+        keys, model, url = s.openrouter_key_list, s.openrouter_model, s.openrouter_base_url
+        return OpenAICompatLLM(keys, model, url, name="openrouter")
+
+    @cached_property
+    def cloud_llm(self) -> LLM:
+        """The cloud LLMs in LLM_ORDER (default gemini, groq, openrouter): the first one answers, each
+        next one only when everything before it is unavailable. One without its API key is left out;
+        with none configured this is plain Gemini, which then reports "not configured".
+        """
+        available = {"gemini": self.gemini, "groq": self.groq, "openrouter": self.openrouter}
+        chosen = [available[n] for n in dict.fromkeys(self.settings.llm_order_list) if n in available]
+        usable = [llm for llm in chosen if llm.configured]
+        if not usable:
+            return self.gemini
+        chain: LLM = usable[0]
+        for backup in usable[1:]:
+            chain = FallbackLLM(primary=chain, backup=backup)
+        log.info("cloud LLMs in order: %s", self.settings.cloud_llm_summary)
+        return chain
 
     @cached_property
     def llm(self) -> LLM:
@@ -156,11 +187,12 @@ class Container:
         if backend == "ollama":
             return self.ollama
         if backend == "hybrid":
-            return RoutedLLM(main=self.gemini, local=self.ollama)
-        return self.gemini
+            return RoutedLLM(main=self.cloud_llm, local=self.ollama)
+        return self.cloud_llm
 
     def check_llm(self) -> str:
-        if self.settings.llm_backend == "gemini" and not self.gemini.configured:
+        usable = self.gemini.configured or self.groq.configured or self.openrouter.configured
+        if self.settings.llm_backend == "gemini" and not usable:
             return NOT_CONFIGURED
         try:
             return "ok" if self.llm.check() else "error"

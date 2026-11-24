@@ -6,6 +6,10 @@
   the next key is used. Network or server errors get one retry after 1 second.
 - GEMINI_MODEL_FALLBACK (optional): when the model still fails (for example 503 "high demand", which
   is per model), the same request is tried once more on this model. Then LLMUnavailable.
+- GEMINI_BUDGET_S (optional, 0 = off): the most time one request may take in total, retries and the
+  fallback model included. Each attempt gets only the time that is left, but at least 10 s (Gemini's
+  minimum deadline); when less than that is left, the request ends with LLMUnavailable, so the next
+  LLM in the chain answers instead of waiting longer.
 - check() lists models with the current key (no generation, no quota used); cached for 60 s.
 Keys never appear in logs or error messages; keys are named by position (#1, #2, ...).
 """
@@ -24,6 +28,9 @@ log = logging.getLogger(__name__)
 
 ClientFactory = Callable[[str], Any]  # api key -> object with .models.generate_content / .models.list
 BACKOFF_SECONDS = 1.0
+# Gemini refuses a request whose deadline is under 10 s (HTTP 400 "Minimum allowed deadline is 10s"),
+# so an attempt only starts with at least this much of the budget left, and never gets a shorter deadline.
+MIN_ATTEMPT_SECONDS = 10.0
 CHECK_TTL_SECONDS = 60.0
 
 
@@ -60,10 +67,13 @@ class GeminiLLM:
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
         fallback_model: str = "",
+        budget_s: float = 0.0,
     ) -> None:
         self._keys = [k for k in api_keys if k]
         self._models = {ModelRole.MAIN: model_main, ModelRole.FAST: model_fast}
         self._fallback_model = fallback_model.strip()
+        self._timeout_s = timeout_s
+        self._budget_s = max(0.0, budget_s)
         self._factory = client_factory or _default_client_factory(timeout_s)
         self._clients: dict[int, Any] = {}
         self._key_index = 0
@@ -102,6 +112,9 @@ class GeminiLLM:
     def generate_text(self, prompt: str, role: ModelRole = ModelRole.FAST) -> str:
         return self._generate(prompt, role, {"temperature": 0.2}).strip()
 
+    def last_provider(self) -> str | None:
+        return "gemini"
+
     def check(self) -> bool:
         now = self._clock()
         if self._checked is not None and now - self._checked[0] < CHECK_TTL_SECONDS:
@@ -122,8 +135,9 @@ class GeminiLLM:
         if not self.configured:
             raise LLMUnavailable("Gemini is not configured (GEMINI_API_KEYS / GEMINI_MODEL_*)")
         primary = self._models[role]
+        deadline = self._clock() + self._budget_s if self._budget_s else None
         try:
-            return self._generate_with(primary, prompt, role, config)
+            return self._generate_with(primary, prompt, role, config, deadline)
         except _Rejected:
             raise  # a bad request fails the same way on another model
         except LLMUnavailable:
@@ -131,19 +145,35 @@ class GeminiLLM:
             if not self._fallback_model or self._fallback_model == primary:
                 raise
             log.warning("Gemini %s unavailable; trying fallback model %s", primary, self._fallback_model)
-            return self._generate_with(self._fallback_model, prompt, role, config)
+            return self._generate_with(self._fallback_model, prompt, role, config, deadline)
 
-    def _generate_with(self, model: str, prompt: str, role: ModelRole, config: dict[str, Any]) -> str:
+    def _time_left(self, deadline: float | None) -> float | None:
+        """Seconds left in this request's budget (None: no budget). Raises when too little is left."""
+        if deadline is None:
+            return None
+        left = deadline - self._clock()
+        if left < MIN_ATTEMPT_SECONDS:
+            log.warning("Gemini time budget of %.0f s used up", self._budget_s)
+            raise LLMUnavailable("Gemini did not answer within its time budget")
+        return left
+
+    def _generate_with(
+        self, model: str, prompt: str, role: ModelRole, config: dict[str, Any], deadline: float | None
+    ) -> str:
         from google.genai import errors as genai_errors
 
         keys_left = len(self._keys)  # each key gets one chance per question
         retried = False
         while True:
+            left = self._time_left(deadline)
+            call_config = config
+            if left is not None:  # this attempt may use only what is left of the budget
+                call_config = {**config, "http_options": {"timeout": int(min(left, self._timeout_s) * 1000)}}
             index = self._key_index
             started = time.perf_counter()
             try:
                 response = self._client(index).models.generate_content(
-                    model=model, contents=prompt, config=config
+                    model=model, contents=prompt, config=call_config
                 )
                 elapsed = time.perf_counter() - started
                 self.stats.record(elapsed, ok=True)
@@ -168,4 +198,7 @@ class GeminiLLM:
                     raise LLMUnavailable("Gemini is not responding") from exc
             retried = True  # one retry after a short wait
             keys_left = 1
+            if deadline is not None and deadline - self._clock() < BACKOFF_SECONDS + MIN_ATTEMPT_SECONDS:
+                log.warning("Gemini time budget of %.0f s used up", self._budget_s)
+                raise LLMUnavailable("Gemini did not answer within its time budget")
             self._sleep(BACKOFF_SECONDS)

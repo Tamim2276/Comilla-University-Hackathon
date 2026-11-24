@@ -20,6 +20,9 @@ def _split(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+LLM_NAMES = ("gemini", "groq", "openrouter")  # LLM_ORDER
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=BACKEND_DIR / ".env",
@@ -39,8 +42,20 @@ class Settings(BaseSettings):
     gemini_model_main: str = ""
     gemini_model_fast: str = ""
     gemini_model_fallback: str = ""  # tried once when the model is overloaded (503) or out of quota
+    gemini_budget_s: float = Field(0.0, ge=0)  # most seconds per Gemini request in total; 0 = no limit
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:7b"
+    # Order of the cloud LLMs: the first answers, each next one only when all before it are unavailable.
+    # Names: gemini, groq, openrouter. One without its API key is skipped.
+    llm_order: str = "gemini,groq,openrouter"
+    # Groq (any OpenAI-compatible API). Empty key: off.
+    groq_api_keys: SecretStr = SecretStr("")  # key1,key2 (the next key on 429/401/403)
+    groq_model: str = "openai/gpt-oss-120b"
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+    # OpenRouter (a ":free" model). Empty key: off.
+    openrouter_api_keys: SecretStr = SecretStr("")  # key1,key2
+    openrouter_model: str = "google/gemma-4-31b-it:free"
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
 
     # --- router + retrieval (FR-AGT-02, 03, 05)
     router_backend: Literal["tfidf", "banglabert", "llm"] = "tfidf"
@@ -88,9 +103,51 @@ class Settings(BaseSettings):
     def gemini_key_list(self) -> list[str]:
         return _split(self.gemini_api_keys.get_secret_value())
 
+    @property
+    def groq_key_list(self) -> list[str]:
+        return _split(self.groq_api_keys.get_secret_value())
+
+    @property
+    def openrouter_key_list(self) -> list[str]:
+        return _split(self.openrouter_api_keys.get_secret_value())
+
+    @property
+    def llm_order_list(self) -> list[str]:
+        return [name.lower() for name in _split(self.llm_order)]
+
+    @property
+    def cloud_llm_summary(self) -> str:
+        """The cloud LLMs that will be used, in LLM_ORDER, e.g. "gemini (m, fast m) -> groq (m)".
+
+        Only providers with an API key (and models) are listed, like the chain the container builds.
+        """
+        parts: list[str] = []
+        gemini_set = bool(self.gemini_key_list and self.gemini_model_main and self.gemini_model_fast)
+        for name in dict.fromkeys(self.llm_order_list):
+            if name == "gemini" and gemini_set:
+                extra = f", 2nd {self.gemini_model_fallback}" if self.gemini_model_fallback else ""
+                parts.append(f"gemini ({self.gemini_model_main}, fast {self.gemini_model_fast}{extra})")
+            elif name == "groq" and self.groq_key_list and self.groq_model:
+                parts.append(f"groq ({self.groq_model})")
+            elif name == "openrouter" and self.openrouter_key_list and self.openrouter_model:
+                parts.append(f"openrouter ({self.openrouter_model})")
+        return " -> ".join(parts) or "none configured"
+
+    @property
+    def llm_summary(self) -> str:
+        """LLM_BACKEND with the models behind it, for the startup log and evaluation reports."""
+        if self.llm_backend == "ollama":
+            return f"ollama ({self.ollama_model})"
+        if self.llm_backend == "hybrid":
+            return f"hybrid: fast jobs on ollama ({self.ollama_model}), main jobs on {self.cloud_llm_summary}"
+        return self.cloud_llm_summary
+
     def config_warnings(self) -> list[str]:
         """Problems worth logging at startup. The app still starts; the affected feature fails politely."""
         warnings: list[str] = []
+        unknown = [n for n in self.llm_order_list if n not in LLM_NAMES]
+        if unknown:
+            warnings.append(f"LLM_ORDER has unknown names {unknown}; known: {', '.join(LLM_NAMES)}")
         if self.llm_backend in ("gemini", "hybrid"):
             if not self.gemini_key_list:
                 warnings.append(f"LLM_BACKEND={self.llm_backend} but GEMINI_API_KEYS is empty")

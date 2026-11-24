@@ -27,3 +27,14 @@ class LLM(Protocol):
     def check(self) -> bool:
         """Cheap key check for /health (no generation)."""
         ...
+
+
+@runtime_checkable
+class ReportsProvider(Protocol):
+    """Optional for LLMs: which provider answered the last call made from this thread (FR-AGT-18).
+
+    A chain (Gemini, then Groq, then OpenRouter) answers with whichever provider was available, so the
+    agent asks this right after its call to record the real one, not just the LLM_BACKEND setting.
+    """
+
+    def last_provider(self) -> str | None: ...

@@ -46,6 +46,9 @@ class OllamaLLM:
     def generate_text(self, prompt: str, role: ModelRole = ModelRole.FAST) -> str:
         return self._chat(prompt, 0.2, None).strip()
 
+    def last_provider(self) -> str | None:
+        return "ollama"
+
     def check(self) -> bool:
         """True when Ollama answers and has OLLAMA_MODEL downloaded (no generation)."""
         try:

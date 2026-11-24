@@ -15,7 +15,7 @@ from app.application.agent.routing import OTHER
 from app.application.agent.state import AgentState
 from app.application.formatting import limit_sentences, trim_speech
 from app.application.ports.classifier import ServiceClassifier
-from app.application.ports.llm import LLM, ModelRole
+from app.application.ports.llm import LLM, ModelRole, ReportsProvider
 from app.application.ports.repositories import AnswerCache
 from app.application.ports.retrieval import Passage, Retriever
 from app.domain.entities import Answer, Checklist, Citation, Message, Service
@@ -203,7 +203,9 @@ def generate(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
         state.get("history", ()), state["channel"],
     )  # fmt: skip
     data = deps.llm.generate_json(prompt, prompts.GENERATE_SCHEMA, role=ModelRole.MAIN, temperature=0.2)
-    return {"draft": data, "llm_calls": 1}
+    # A chain answers with whichever provider was available: record that one (FR-AGT-18).
+    provider = deps.llm.last_provider() if isinstance(deps.llm, ReportsProvider) else None
+    return {"draft": data, "llm_calls": 1, "llm_provider": provider}
 
 
 def grade(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
@@ -322,7 +324,7 @@ def finalize(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
         router_source=state.get("router_source"),
         checklist=build_checklist(draft.get("checklist"), service, state.get("unsupported_checklist") or ()),
         citations=build_citations(_supported_claims(state), state.get("passages") or []),
-        llm_backend=deps.llm_backend,
+        llm_backend=state.get("llm_provider") or deps.llm_backend,
     )
     _store_in_cache(state, deps, answer)
     return {"answer": answer}
@@ -357,7 +359,7 @@ def finalize_follow_up(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
         confidence=_clamp(state.get("confidence")),
         router_source=state.get("router_source"),
         follow_up_question=question,
-        llm_backend=deps.llm_backend,
+        llm_backend=state.get("llm_provider") or deps.llm_backend,
     )
     return {"answer": answer}
 
@@ -372,7 +374,7 @@ def fallback(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
         service_id=service_id if service_id and service_id != OTHER else None,
         confidence=_clamp(state.get("confidence")),
         router_source=state.get("router_source"),
-        llm_backend=deps.llm_backend,
+        llm_backend=state.get("llm_provider") or deps.llm_backend,
     )
     return {"answer": answer}
 
