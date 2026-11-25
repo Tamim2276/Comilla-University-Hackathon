@@ -113,8 +113,8 @@ class LangGraphAnswerEngine:
         )
         graph.add_conditional_edges(
             routing.VERIFY,
-            lambda state: routing.after_verify(state, retries),
-            [routing.FINALIZE, *retry_targets],
+            lambda state: routing.after_verify(state, retries, situation),
+            [routing.FINALIZE, routing.UNDERSTAND, *retry_targets],
         )
         for last in (routing.FINALIZE, routing.FINALIZE_FOLLOW_UP, routing.FALLBACK):
             graph.add_edge(last, END)

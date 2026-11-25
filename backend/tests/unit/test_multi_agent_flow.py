@@ -136,3 +136,29 @@ def test_a_checked_direct_answer_leads_the_speech_and_cites_its_source() -> None
     assert first in answer.display_text and len(answer.speech_text.split()) <= 60
     assert first in llm.verify_prompts[0]  # checked like every other claim
     assert "https://dss.gov.bd/old" in {c.source_url for c in answer.citations}
+
+
+def test_one_weak_section_does_not_throw_away_the_good_one() -> None:
+    class WeakWidowLLM(MixedLLM):
+        def _answer(self, prompt: str, schema: Any, role: Any) -> dict[str, Any]:
+            if self.step_of(schema) == "verify":
+                self.steps.append("verify")
+                assert "services_answering" in schema["properties"]
+                return {**all_supported(prompt), "answers_question": False, "services_answering": [OLD]}
+            return super()._answer(prompt, schema, role)
+
+    answer = engine(WeakWidowLLM())[0].answer("বিধবা, বয়স ৬৬, কী লাগবে?", [], Channel.APP)
+    assert answer.status is AnswerStatus.ANSWERED and answer.mode == "single"
+    assert answer.service_ids == (OLD,) and [c.service_id for c in answer.checklists] == [OLD]
+    assert answer.conflicts == () and CONFLICT_NOTE not in answer.speech_text
+
+
+def test_no_answering_section_still_falls_back() -> None:
+    class NoneLLM(MixedLLM):
+        def _answer(self, prompt: str, schema: Any, role: Any) -> dict[str, Any]:
+            if self.step_of(schema) == "verify":
+                self.steps.append("verify")
+                return {**all_supported(prompt), "answers_question": False, "services_answering": []}
+            return super()._answer(prompt, schema, role)
+
+    assert engine(NoneLLM())[0].answer("প্রশ্ন", [], Channel.APP).status is AnswerStatus.FALLBACK

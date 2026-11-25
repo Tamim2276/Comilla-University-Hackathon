@@ -141,10 +141,22 @@ def after_guard(state: AgentState, max_retries: int) -> str:
     return VERIFY
 
 
-def after_verify(state: AgentState, max_retries: int) -> str:
-    """All core claims and the spoken answer supported -> finalize; else retry, then fall back (FR-AGT-10)."""
+# understand already ran (situation), a pending follow-up keeps its service (context), or the LLM
+# router decided (llm): no second chance through `understand`.
+NO_SECOND_CHANCE = (RouterSource.SITUATION, RouterSource.CONTEXT, RouterSource.LLM)
+
+
+def after_verify(state: AgentState, max_retries: int, situation: SituationRouting = OLD_FLOW) -> str:
+    """All core claims and the spoken answer supported -> finalize; else retry, then fall back (FR-AGT-10).
+
+    True facts that do not answer the question: in situation mode, a question the router decided
+    alone gets one second chance through `understand` (it may be about two services, or need
+    other passages); otherwise a retry would not change it, so fall back.
+    """
     if state.get("answers_question") is False:
-        return FALLBACK  # true facts, but for another question: a retry would not change that
+        if situation.enabled and state.get("router_source") not in NO_SECOND_CHANCE:
+            return UNDERSTAND
+        return FALLBACK
     claims = state.get("verified_claims") or []
     supported = [c for c in claims if c.get("supported")]
     core_failed = any(c.get("core") and not c.get("supported") for c in claims)

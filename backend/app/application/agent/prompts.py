@@ -326,7 +326,17 @@ VERIFY_MULTI_NOTE = """
 This answer covers TWO services. Its last sentences are fixed texts of the helpline (they say the
 rules differ, or that the official documents do not say whether both can be received together).
 Do not check them against the passages. For `answers_question`, such a sentence counts as an
-honest answer to that part of the question."""
+honest answer to that part of the question.
+Services in this answer: {services}. `services_answering` = the ids of the services whose part of
+the answer gives the citizen what they asked about that service (a part that only says the
+documents have no details does not)."""
+
+
+def verify_multi_schema() -> dict[str, Any]:
+    schema = {**VERIFY_SCHEMA, "properties": dict(VERIFY_SCHEMA["properties"])}
+    schema["properties"]["services_answering"] = {"type": "array", "items": {"type": "string"}}
+    schema["required"] = [*VERIFY_SCHEMA["required"], "services_answering"]
+    return schema
 
 
 def build_verify_prompt(
@@ -337,6 +347,7 @@ def build_verify_prompt(
     checklist: Mapping[str, Any] | None = None,
     question: str = "",
     multi: bool = False,
+    services: Mapping[str, str] | None = None,
 ) -> str:
     numbered = "\n".join(f"{i}. {text}" for i, text in enumerate(claims)) or "(none)"
     return VERIFY_PROMPT.format(
@@ -346,7 +357,11 @@ def build_verify_prompt(
         speech=speech,
         display=display or "(none)",
         checklist=format_checklist(checklist),
-    ) + (VERIFY_MULTI_NOTE if multi else "")
+    ) + (VERIFY_MULTI_NOTE.format(services=_service_list(services or {})) if multi else "")
+
+
+def _service_list(services: Mapping[str, str]) -> str:
+    return ", ".join(f"{sid} = {name}" for sid, name in services.items()) or "(unknown)"
 
 
 # ---------------------------------------------------------------- understand (FR-AGT-19, 23)

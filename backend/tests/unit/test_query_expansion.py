@@ -29,7 +29,7 @@ def deps(passages: list[Passage], expansion: bool = True) -> AgentDeps:
 
 def test_queries_built_and_deduplicated() -> None:
     queries = build_queries("স্বামী মারা গেছেন", WIDOW, "বিধবা ভাতা যোগ্যতা")
-    assert queries == ["স্বামী মারা গেছেন", "বিধবা ভাতা বিধবা স্বামী", "বিধবা ভাতা যোগ্যতা"]
+    assert queries == ["স্বামী মারা গেছেন", "বিধবা ভাতা যোগ্যতা", "বিধবা ভাতা বিধবা স্বামী"]
     assert build_queries("বিধবা ভাতা  বিধবা স্বামী", WIDOW, "") == ["বিধবা ভাতা বিধবা স্বামী"]
     assert build_queries("প্রশ্ন", WIDOW, "প্রশ্ন") == ["প্রশ্ন", "বিধবা ভাতা বিধবা স্বামী"]
 
@@ -38,10 +38,23 @@ def test_expansion_off_gives_one_query() -> None:
     assert build_queries("স্বামী মারা গেছেন", WIDOW, "বিধবা ভাতা", expansion=False) == ["স্বামী মারা গেছেন"]
 
 
-def test_merge_keeps_the_best_score_per_chunk() -> None:
-    merged = merge_best([[passage("a", "w", 0.5), passage("b", "w", 0.7)], [passage("a", "w", 0.9)]], k=5)
-    assert [(p.chunk_id, p.score) for p in merged] == [("a", 0.9), ("b", 0.7)]
+def test_merge_keeps_each_chunk_once_with_its_best_score() -> None:
+    merged = merge_best([[passage("a", "w", 0.5), passage("b", "w", 0.4)], [passage("a", "w", 0.9)]], k=5)
+    assert [(p.chunk_id, p.score) for p in merged] == [("a", 0.9), ("b", 0.4)]
     assert len(merge_best([[passage(str(i), "w", i / 10) for i in range(9)]], k=3)) == 3
+
+
+def test_round_robin_merge_lets_every_query_contribute_its_best_hit() -> None:
+    # A bag of words scores generic passages higher than the question scores the passage that answers it.
+    question = [passage("form", "d", 0.858), passage("card", "d", 0.843)]
+    llm = [passage("eligibility", "d", 0.889), passage("aims", "d", 0.886)]
+    official = [passage("payment", "d", 0.889), passage("definition", "d", 0.888)]
+    top3 = [p.chunk_id for p in merge_best([question, llm, official], k=3)]
+    assert top3 == ["form", "eligibility", "payment"]  # each query's first hit, in query order
+    shared = [passage("generic", "d", 0.9)]  # found by two queries: no bonus for agreement
+    merged = merge_best([[passage("own", "d", 0.8)], shared, shared], k=2)
+    assert [p.chunk_id for p in merged] == ["own", "generic"]
+
 
 
 def test_single_mode_searches_every_query_with_the_service_filter() -> None:
@@ -50,7 +63,7 @@ def test_single_mode_searches_every_query_with_the_service_filter() -> None:
              "search_queries": {"widow_allowance": "বিধবা ভাতা"}, "channel": Channel.APP}  # fmt: skip
     out = steps.retrieve(state, d)  # type: ignore[arg-type]
     searched = d.retriever.searches  # type: ignore[attr-defined]
-    assert [q for q, _, _ in searched[:3]] == ["স্বামী নেই", "বিধবা ভাতা বিধবা স্বামী", "বিধবা ভাতা"]
+    assert [q for q, _, _ in searched[:3]] == ["স্বামী নেই", "বিধবা ভাতা", "বিধবা ভাতা বিধবা স্বামী"]
     assert all(sid == "widow_allowance" for _, sid, _ in searched)
     assert [p.chunk_id for p in out["passages"]] == ["w1"]
 

@@ -288,3 +288,42 @@ def test_unsure_hint_router_runs_understand_for_a_vague_question() -> None:
     assert routing.after_classify(sure, 0.7, SITUATION) == routing.RETRIEVE  # type: ignore[arg-type]
     no_rule = routing.SituationRouting(enabled=True, multi_min_prob=0.25, hint_min_confidence=0.0)
     assert routing.after_classify(vague, 0.7, no_rule) == routing.RETRIEVE  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------- second chance after "does not answer"
+
+NOT_ANSWERED = {**ALL_SUPPORTED, "answers_question": False}
+
+
+@pytest.mark.parametrize(
+    ("source", "situation", "expected"),
+    [
+        (RouterSource.BANGLABERT, SITUATION, routing.UNDERSTAND),
+        (RouterSource.TFIDF, SITUATION, routing.UNDERSTAND),
+        (RouterSource.SITUATION, SITUATION, routing.FALLBACK),  # understand already ran: no loop
+        (RouterSource.CONTEXT, SITUATION, routing.FALLBACK),  # a pending follow-up keeps its service
+        (RouterSource.BANGLABERT, routing.OLD_FLOW, routing.FALLBACK),  # situation mode off
+    ],
+)
+def test_after_verify_escalates_once(source: RouterSource, situation: Any, expected: str) -> None:
+    state = {"answers_question": False, "router_source": source, "verified_claims": []}
+    assert routing.after_verify(state, 2, situation) == expected  # type: ignore[arg-type]
+
+
+def test_a_rejected_single_answer_gets_one_second_chance_through_understand() -> None:
+    llm = SituationLLM(
+        grade=[ALL_RELEVANT], generate=[GOOD_DRAFT], verify=[NOT_ANSWERED, ALL_SUPPORTED],
+        understand=[{**WIDOW_UNDERSTOOD, "services": ["old_age_allowance"], "search_queries": {}}],
+    )  # fmt: skip
+    answer = run("বয়স্ক ভাতা কী?", deps({"old_age_allowance": 0.95, "other": 0.05}, llm))
+    assert answer.status is AnswerStatus.ANSWERED and answer.router_source is RouterSource.SITUATION
+    assert llm.steps.count("understand") == 1 and llm.steps.count("verify") == 2
+
+
+def test_rejected_twice_ends_in_fallback_after_one_understand() -> None:
+    llm = SituationLLM(
+        grade=[ALL_RELEVANT], generate=[GOOD_DRAFT], verify=[NOT_ANSWERED],
+        understand=[{**WIDOW_UNDERSTOOD, "services": ["old_age_allowance"], "search_queries": {}}],
+    )  # fmt: skip
+    answer = run("বয়স্ক ভাতা কী?", deps({"old_age_allowance": 0.95, "other": 0.05}, llm))
+    assert answer.status is AnswerStatus.FALLBACK and llm.steps.count("understand") == 1

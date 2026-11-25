@@ -232,3 +232,23 @@ def test_direct_answer_comes_right_after_the_intro_and_is_never_cut() -> None:
     text = multi.build_speech(["জন্ম নিবন্ধন", "ই-পাসপোর্ট"], [long, long], False, None, False, 60, direct=FIRST)
     intro = MULTI_INTRO.format(a="জন্ম নিবন্ধন", b="ই-পাসপোর্ট")
     assert text.startswith(f"{intro} {FIRST}") and len(text.split()) <= 60
+
+
+# ---------------------------------------------------------------- one weak section (verify, multi)
+
+
+def test_keep_answering_drops_only_the_weak_section() -> None:
+    d = draft(conflicts=[{"topic_bn": "বয়স", "sides": [side(OLD, "৬৫", ["P1"]), side(WIDOW, "১৮", ["P3"])]}])
+    kept, answers = multi.keep_answering(d, [WIDOW])
+    assert answers and [s["service_id"] for s in kept["sections"]] == [WIDOW]
+    assert kept["conflicts"] == [] and kept["combine_rule"]["stated"] is False and not kept["asks_combine"]
+
+
+def test_keep_answering_keeps_the_not_answered_verdict_when_nothing_is_named() -> None:
+    for named in (None, [], ["e_passport"]):
+        assert multi.keep_answering(draft(), named)[1] is False
+
+
+def test_every_section_answering_keeps_the_whole_answer() -> None:
+    kept, answers = multi.keep_answering(draft(), [OLD, WIDOW])
+    assert answers and kept == draft()

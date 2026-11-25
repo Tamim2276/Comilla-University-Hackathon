@@ -115,6 +115,27 @@ def direct_text(draft: Mapping[str, Any]) -> str | None:
     return _text(direct.get("text_bn")) or None if direct.get("stated") else None
 
 
+def keep_answering(draft: Mapping[str, Any], answering: Any) -> tuple[dict[str, Any], bool]:
+    """When the verifier says the whole answer does not answer the question, keep only the
+    sections it names as answering. Returns (draft, answers_question).
+
+    Nothing named keeps the verdict: not answered. Every section named means each service's part
+    answers, and what is missing is the part across both ("together?"), which the fixed
+    COMBINE_UNKNOWN sentence or the documents' combine rule already covers: answered, all kept.
+    With one service left, the parts that need two (conflicts, combine rule, direct answer) go.
+    """
+    sections = list(draft.get("sections") or [])
+    named = {str(x) for x in answering} if isinstance(answering, list) else set()
+    kept = [s for s in sections if s.get("service_id") in named]
+    if not kept:
+        return dict(draft), False
+    if len(kept) == len(sections):
+        return dict(draft), True
+    none = {"stated": False, "text_bn": None, "passage_ids": []}
+    return {**draft, "sections": kept, "conflicts": [], "combine_rule": none, "direct_answer": none,
+            "asks_combine": False}, True  # fmt: skip
+
+
 def flat_claims(draft: Mapping[str, Any]) -> list[dict[str, Any]]:
     """Every section claim (with `supported` once verified), for routing and citations."""
     return [c for s in draft.get("sections") or [] for c in s.get("claims") or []]

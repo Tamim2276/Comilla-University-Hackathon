@@ -482,8 +482,9 @@ def _verify_multi(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
             state.get("passages") or [],
             question=state.get("question", ""),
             multi=True,
+            services={s["service_id"]: names.get(s["service_id"], "") for s in draft.get("sections") or []},
         ),
-        prompts.VERIFY_SCHEMA,
+        prompts.verify_multi_schema(),
         role=ModelRole.MAIN,
         temperature=0.0,
     )
@@ -493,6 +494,12 @@ def _verify_multi(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
         if isinstance(item, Mapping) and isinstance(item.get("index"), int)
     }
     checked = multi.apply_verdicts(draft, items, verdicts)
+    answers = bool(data.get("answers_question", True))
+    if not answers:
+        # One weak section must not throw away a good one: keep the services that answer (if any).
+        checked, answers = multi.keep_answering(checked, data.get("services_answering"))
+        if answers:
+            log.info("verify (multi): kept only %s", [s["service_id"] for s in checked["sections"]])
     claims = [
         {**c, "core": bool(c.get("core")), "supported": bool(c.get("supported"))}
         for c in multi.flat_claims(checked)
@@ -503,7 +510,7 @@ def _verify_multi(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     return {
         "draft": checked,
         "verified_claims": claims,
-        "answers_question": bool(data.get("answers_question", True)),
+        "answers_question": answers,
         "speech_supported": bool(data.get("speech_supported", True)),
         "display_supported": True,
         "unsupported_checklist": [],
